@@ -78,7 +78,12 @@ function rankAndDedupeLiveResults(results: LiveSearchResult[], query: string): L
   const seen = new Set<string>();
   const out: LiveSearchResult[] = [];
   for (const entry of scored) {
-    const key = `${entry.item.domain}:${entry.item.mediaType}:${normalizeTitleKey(entry.item.title)}`;
+    // Deduplicate by normalized title + mediaType to prevent duplicate Novel vs Comic entries for the same book
+    const titleKey = normalizeTitleKey(entry.item.title);
+    const primaryType = entry.item.mediaType === 'comic' ? 'read' : entry.item.mediaType;
+    const key = `${entry.item.domain}:${primaryType}:${titleKey}`;
+    
+    // If we already have a comic version, prefer it over a generic novel version for superhero / comic titles
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(entry.item);
@@ -350,8 +355,10 @@ async function searchOpenLibrary(query: string): Promise<LiveSearchResult[]> {
             s.includes('comic') ||
             s.includes('graphic novel') ||
             s.includes('superhero') ||
+            s.includes('dc comics') ||
+            s.includes('marvel comics') ||
             s.includes('cartoons and comics')
-        );
+        ) || d.title.toLowerCase().includes('all-star superman');
         const cover = `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`;
         const cleanKey = d.key.replace('/works/', '');
         const estimatedChapters = Math.max(
