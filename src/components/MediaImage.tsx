@@ -49,7 +49,7 @@ export function MediaImage({
           setFailed(true);
         }
       }}
-      className={className}
+      className={`object-cover ${className}`}
     />
   );
 }
