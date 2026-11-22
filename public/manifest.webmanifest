@@ -1,0 +1,17 @@
+{
+  "name": "cue — Private Media Tracker & Journal",
+  "short_name": "cue",
+  "description": "Watch, Read, Play — your private personal media tracker and journal for shows, movies, anime, novels, manga, comics, and video games.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#131519",
+  "theme_color": "#131519",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
