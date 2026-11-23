@@ -732,6 +732,7 @@ export function createSeedState(): CueStoreState {
     readProgress,
     gameProgress,
     upcoming,
+    history: [],
     journalEntries,
     lists,
     profile: {

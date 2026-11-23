@@ -20,6 +20,7 @@ import type {
   UserProfile,
 } from '../types';
 import { formatEpisodeCode, getAllEpisodes, getEpisodeKey, getShowStats } from '../utils/stats';
+import { generateSyncCode } from '../services/syncApi';
 
 const STORAGE_KEY = 'cue_state_v3';
 const LEGACY_V2_KEY = 'cue_state_v2';
@@ -192,6 +193,16 @@ interface CueContextValue {
   exportLibraryJson: () => string;
   importLibraryJson: (rawJson: string) => { ok: boolean; summary: string };
   selectiveReset: (scope: 'watch' | 'read' | 'play' | 'all') => void;
+
+  // Sync
+  syncCode: string | null;
+  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  lastSyncedAt: number | null;
+  syncError: string | null;
+  createSyncCode: () => string;
+  linkSyncCode: (code: string) => Promise<{ ok: boolean; message?: string }>;
+  syncNow: () => Promise<void>;
+  unlinkSyncCode: () => void;
 }
 
 const CueContext = createContext<CueContextValue | null>(null);
@@ -213,6 +224,11 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
+
+  const [syncCode, setSyncCode] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const route = routeStack[routeStack.length - 1];
   const canGoBack = routeStack.length > 1;
@@ -1591,6 +1607,69 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
     [showToast]
   );
 
+  // Sync functions
+  const createSyncCode = useCallback(() => {
+    const code = generateSyncCode();
+    setSyncCode(code);
+    setSyncError(null);
+    showToast(`Created sync code: ${code}`);
+    return code;
+  }, [showToast]);
+
+  const linkSyncCode = useCallback(async (code: string): Promise<{ ok: boolean; message?: string }> => {
+    setSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      const { pullCloudLibrary } = await import('../services/syncApi');
+      const result = await pullCloudLibrary(code);
+      if (result.exists && result.state) {
+        setState(result.state);
+        setSyncCode(code);
+        setLastSyncedAt(result.updatedAt || Date.now());
+        setSyncStatus('success');
+        showToast('Linked and synced from cloud');
+        return { ok: true };
+      } else {
+        setSyncStatus('error');
+        setSyncError(result.error || 'Sync code not found');
+        return { ok: false, message: result.error || 'Sync code not found' };
+      }
+    } catch {
+      setSyncStatus('error');
+      setSyncError('Failed to link sync code');
+      return { ok: false, message: 'Failed to link sync code' };
+    }
+  }, [showToast]);
+
+  const syncNow = useCallback(async () => {
+    if (!syncCode) return;
+    setSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      const { pushCloudLibrary } = await import('../services/syncApi');
+      const result = await pushCloudLibrary(syncCode, state);
+      if (result.ok) {
+        setLastSyncedAt(result.updatedAt);
+        setSyncStatus('success');
+        showToast('Synced to cloud');
+      } else {
+        setSyncStatus('error');
+        setSyncError(result.error || 'Failed to sync');
+      }
+    } catch {
+      setSyncStatus('error');
+      setSyncError('Network error while syncing');
+    }
+  }, [syncCode, state, showToast]);
+
+  const unlinkSyncCode = useCallback(() => {
+    setSyncCode(null);
+    setLastSyncedAt(null);
+    setSyncStatus('idle');
+    setSyncError(null);
+    showToast('Sync code unlinked');
+  }, [showToast]);
+
   return (
     <CueContext.Provider
       value={{
@@ -1663,6 +1742,14 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
         exportLibraryJson,
         importLibraryJson,
         selectiveReset,
+        syncCode,
+        syncStatus,
+        lastSyncedAt,
+        syncError,
+        createSyncCode,
+        linkSyncCode,
+        syncNow,
+        unlinkSyncCode,
       }}
     >
       {children}
