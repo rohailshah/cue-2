@@ -222,8 +222,20 @@ export function SearchView() {
 
   const dedupedLive = useMemo(() => {
     const localTitles = new Set(localMatches.map((m) => `${m.kind}:${m.title.toLowerCase()}`));
-    return liveResults.filter((r) => !localTitles.has(`${r.kind}:${r.title.toLowerCase()}`));
-  }, [liveResults, localMatches]);
+    return liveResults.filter((r) => {
+      if (localTitles.has(`${r.kind}:${r.title.toLowerCase()}`)) return false;
+
+      if (filter === 'tv' && r.mediaType !== 'tv') return false;
+      if (filter === 'anime' && r.mediaType !== 'anime') return false;
+      if (filter === 'movies' && r.mediaType !== 'movie') return false;
+      if (filter === 'manga' && r.mediaType !== 'manga') return false;
+      if (filter === 'comics' && r.mediaType !== 'comic') return false;
+      if (filter === 'novels' && r.mediaType !== 'novel') return false;
+      if (filter === 'games' && r.mediaType !== 'game') return false;
+
+      return true;
+    });
+  }, [liveResults, localMatches, filter]);
 
   const featuredAllMedia = useMemo(() => {
     const picks: Array<{
@@ -334,8 +346,8 @@ export function SearchView() {
 
   return (
     <div className="min-h-dvh pb-28 md:pb-14 pt-4 md:pt-24 px-4 sm:px-6 lg:px-10 max-w-5xl mx-auto">
-      <div className="mb-4">
-        <div className="relative flex items-center">
+      <div className="mb-6">
+        <div className="relative flex items-center mb-4">
           <Search className="w-4 h-4 text-ink-dim absolute left-4 pointer-events-none" />
           <input
             type="text"
@@ -361,7 +373,7 @@ export function SearchView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-6">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2">
           {MEDIA_FILTERS.map((tab) => {
             const active = filter === tab.id;
             return (
