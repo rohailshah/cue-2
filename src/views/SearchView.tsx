@@ -12,9 +12,26 @@ import {
 import { useCueStore } from '../store/useCueStore';
 import { computeAllMediaStats } from '../utils/stats';
 
-type SearchDomainFilter = 'all' | 'watch' | 'read' | 'play';
+type SearchMediaFilter = 
+  | 'all' 
+  | 'tv' 
+  | 'movies' 
+  | 'anime' 
+  | 'manga' 
+  | 'comics' 
+  | 'novels' 
+  | 'games';
 
-const GENRE_PILLS = ['Sci-Fi', 'Fantasy', 'Drama', 'Action', 'RPG', 'Dark Fantasy', 'Thriller'];
+const MEDIA_FILTERS = [
+  { id: 'all', label: 'All', style: 'bg-white/10 border-white/20 text-white hover:bg-white/20' },
+  { id: 'tv', label: 'TV', style: 'bg-watch/20 border-watch/40 text-watch hover:bg-watch/30' },
+  { id: 'movies', label: 'Movies', style: 'bg-watch/20 border-watch/40 text-watch hover:bg-watch/30' },
+  { id: 'anime', label: 'Anime', style: 'bg-watch/20 border-watch/40 text-watch hover:bg-watch/30' },
+  { id: 'manga', label: 'Manga', style: 'bg-read/20 border-read/40 text-read hover:bg-read/30' },
+  { id: 'comics', label: 'Comics', style: 'bg-read/20 border-read/40 text-read hover:bg-read/30' },
+  { id: 'novels', label: 'Novels', style: 'bg-read/20 border-read/40 text-read hover:bg-read/30' },
+  { id: 'games', label: 'Games', style: 'bg-play/20 border-play/40 text-play hover:bg-play/30' },
+] as const;
 
 export function SearchView() {
   const {
@@ -31,8 +48,7 @@ export function SearchView() {
   } = useCueStore();
 
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<SearchDomainFilter>('all');
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [filter, setFilter] = useState<SearchMediaFilter>('all');
   const [liveResults, setLiveResults] = useState<LiveSearchResult[]>([]);
   const [loadingLive, setLoadingLive] = useState(false);
   const [hydratingId, setHydratingId] = useState<string | null>(null);
@@ -49,7 +65,13 @@ export function SearchView() {
     setLoadingLive(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await searchLiveMedia(q, filter, state.settings.tmdbApiKey);
+        // Map media filter to domain for live search API
+        let domainFilter: 'all' | 'watch' | 'read' | 'play' = 'all';
+        if (['tv', 'movies', 'anime'].includes(filter)) domainFilter = 'watch';
+        else if (['manga', 'comics', 'novels'].includes(filter)) domainFilter = 'read';
+        else if (filter === 'games') domainFilter = 'play';
+        
+        const res = await searchLiveMedia(q, domainFilter, state.settings.tmdbApiKey);
         if (!cancelled) setLiveResults(res);
       } catch {
         if (!cancelled) setLiveResults([]);
@@ -85,11 +107,21 @@ export function SearchView() {
       inLibrary: boolean;
     }> = [];
 
-    if (filter === 'all' || filter === 'watch') {
+    const showTV = filter === 'all' || filter === 'tv';
+    const showMovies = filter === 'all' || filter === 'movies';
+    const showAnime = filter === 'all' || filter === 'anime';
+    const showManga = filter === 'all' || filter === 'manga';
+    const showComics = filter === 'all' || filter === 'comics';
+    const showNovels = filter === 'all' || filter === 'novels';
+    const showGames = filter === 'all' || filter === 'games';
+
+    if (showTV || showAnime) {
       for (const id of state.showOrder) {
         const s = state.shows[id];
         if (!s) continue;
-        if (selectedGenre && !s.genres.some((g) => g.toLowerCase().includes(selectedGenre.toLowerCase()))) continue;
+        const isAnime = s.mediaType === 'anime';
+        if (isAnime && !showAnime) continue;
+        if (!isAnime && !showTV) continue;
         if (q && !s.title.toLowerCase().includes(q) && !s.genres.some((g) => g.toLowerCase().includes(q))) continue;
         items.push({
           domain: 'watch',
@@ -97,17 +129,19 @@ export function SearchView() {
           id: s.id,
           title: s.title,
           year: s.year,
-          badge: s.mediaType === 'anime' ? 'Anime' : 'Show',
+          badge: isAnime ? 'Anime' : 'TV',
           genres: s.genres,
           rating: s.rating,
           posterUrl: s.posterUrl,
           inLibrary: Boolean(state.showProgress[s.id]?.bookmarked),
         });
       }
+    }
+
+    if (showMovies) {
       for (const id of state.movieOrder) {
         const m = state.movies[id];
         if (!m) continue;
-        if (selectedGenre && !m.genres.some((g) => g.toLowerCase().includes(selectedGenre.toLowerCase()))) continue;
         if (q && !m.title.toLowerCase().includes(q) && !m.genres.some((g) => g.toLowerCase().includes(q))) continue;
         items.push({
           domain: 'watch',
@@ -124,11 +158,17 @@ export function SearchView() {
       }
     }
 
-    if (filter === 'all' || filter === 'read') {
+    if (showManga || showComics || showNovels) {
       for (const id of state.readOrder) {
         const r = state.readItems[id];
         if (!r) continue;
-        if (selectedGenre && !r.genres.some((g) => g.toLowerCase().includes(selectedGenre.toLowerCase()))) continue;
+        const fmt = r.format.toLowerCase();
+        const isManga = fmt === 'manga';
+        const isComic = fmt === 'comic' || fmt === 'graphic novel';
+        const isNovel = fmt === 'novel' || fmt === 'light novel';
+        if (isManga && !showManga) continue;
+        if (isComic && !showComics) continue;
+        if (isNovel && !showNovels) continue;
         if (
           q &&
           !r.title.toLowerCase().includes(q) &&
@@ -151,16 +191,15 @@ export function SearchView() {
       }
     }
 
-    if (filter === 'all' || filter === 'play') {
+    if (showGames) {
       for (const id of state.gameOrder) {
         const g = state.games[id];
         if (!g) continue;
-        if (selectedGenre && !g.genres.some((gen) => gen.toLowerCase().includes(selectedGenre.toLowerCase()))) continue;
         if (
           q &&
           !g.title.toLowerCase().includes(q) &&
           !g.developer.toLowerCase().includes(q) &&
-          !g.genres.some((gen) => gen.toLowerCase().includes(selectedGenre?.toLowerCase() || q))
+          !g.genres.some((gen) => gen.toLowerCase().includes(q))
         )
           continue;
         items.push({
@@ -179,7 +218,7 @@ export function SearchView() {
     }
 
     return items;
-  }, [state, query, filter, selectedGenre]);
+  }, [state, query, filter]);
 
   const dedupedLive = useMemo(() => {
     const localTitles = new Set(localMatches.map((m) => `${m.kind}:${m.title.toLowerCase()}`));
@@ -291,7 +330,7 @@ export function SearchView() {
     }
   };
 
-  const hasActiveFilter = query.trim().length > 0 || selectedGenre !== null;
+  const hasActiveFilter = query.trim().length > 0;
 
   return (
     <div className="min-h-dvh pb-28 md:pb-14 pt-4 md:pt-24 px-4 sm:px-6 lg:px-10 max-w-5xl mx-auto">
@@ -322,67 +361,31 @@ export function SearchView() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 mt-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {(
-              [
-                { id: 'all', label: 'All' },
-                { id: 'watch', label: 'Watch' },
-                { id: 'read', label: 'Read' },
-                { id: 'play', label: 'Play' },
-              ] as const
-            ).map((tab) => {
-              const active = filter === tab.id;
-              const activeClass =
-                tab.id === 'watch'
-                  ? 'bg-watch border-watch text-brand-ink'
-                  : tab.id === 'read'
-                    ? 'bg-read border-read text-brand-ink'
-                    : tab.id === 'play'
-                      ? 'bg-play border-play text-brand-ink'
-                      : 'bg-brand border-brand text-brand-ink';
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setFilter(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border shrink-0 transition-colors ${
-                    active ? activeClass : 'bg-surface border-white/10 text-ink-dim hover:text-ink'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-ink-dim px-2.5 py-1 rounded-full bg-surface border border-white/8 shrink-0">
-            <Globe2 className="w-3 h-3 text-watch" />
-            All-Media Live Search
-          </span>
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-6">
+          {MEDIA_FILTERS.map((tab) => {
+            const active = filter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilter(tab.id)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border shrink-0 transition-colors ${
+                  active
+                    ? tab.style.replace('hover:bg', 'bg').replace('hover:text', 'text')
+                    : tab.style.replace('bg-', 'bg-surface border-white/10 text-ink-dim hover:')
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Genre Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-2 mb-6">
-        {GENRE_PILLS.map((genre) => {
-          const active = selectedGenre === genre;
-          return (
-            <button
-              key={genre}
-              type="button"
-              onClick={() => setSelectedGenre(active ? null : genre)}
-              className={`px-3 py-1 rounded-full text-xs border shrink-0 transition-colors ${
-                active
-                  ? 'border-white/40 bg-white/15 text-ink font-medium'
-                  : 'border-white/8 bg-surface text-ink-dim hover:text-ink'
-              }`}
-            >
-              {genre}
-            </button>
-          );
-        })}
-      </div>
+      <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-ink-dim px-2.5 py-1 rounded-full bg-surface border border-white/8 shrink-0">
+        <Globe2 className="w-3 h-3 text-watch" />
+        All-Media Live Search
+      </span>
 
       {hasActiveFilter ? (
         <div className="space-y-6 animate-fade-in">
@@ -439,7 +442,7 @@ export function SearchView() {
                           {item.rating.toFixed(1)}
                         </span>
                       </p>
-                      <p className="text-xs text-ink-faint truncate mt-1">{item.genres.join(' · ')}</p>
+                      
                     </div>
                     <div className="pr-3.5 shrink-0">
                       <button
@@ -526,7 +529,7 @@ export function SearchView() {
                           </span>
                         </div>
                         <p className="text-xs text-ink-dim mt-0.5 truncate">
-                          {item.year} · {item.subtitle || item.genres.slice(0, 2).join(' · ')}
+                          {item.year} · {item.subtitle}
                         </p>
                         <p className="text-xs text-ink-faint truncate mt-1">{item.overview}</p>
                       </div>
@@ -638,7 +641,6 @@ export function SearchView() {
                       />
                     </div>
                     <p className="mt-2 text-sm font-semibold text-ink truncate">{entry.title}</p>
-                    <p className="text-xs text-ink-dim truncate">{entry.genres.slice(0, 2).join(' · ')}</p>
                   </button>
                 ))}
               </div>
