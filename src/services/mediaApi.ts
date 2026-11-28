@@ -323,6 +323,10 @@ async function searchOpenLibrary(query: string): Promise<LiveSearchResult[]> {
         if (queryIsLatin && hasNonLatinScript(d.title)) return false;
 
         const lowerTitle = d.title.toLowerCase();
+        const queryTerms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+        const matchesQuery = queryTerms.length === 0 || queryTerms.some((term) => lowerTitle.includes(term));
+        if (!matchesQuery) return false;
+
         if (
           lowerTitle.includes('coloring book') ||
           lowerTitle.includes('activity book') ||
@@ -455,6 +459,69 @@ async function searchAniListManga(query: string): Promise<LiveSearchResult[]> {
   }
 }
 
+async function searchWikipediaGames(query: string): Promise<LiveSearchResult[]> {
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query + ' video game')}&limit=8&namespace=0&format=json&origin=*`
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as [string, string[], string[], string[]];
+    const titles = data[1] || [];
+    const results: LiveSearchResult[] = [];
+
+    for (const title of titles) {
+      const summaryRes = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`
+      );
+      if (!summaryRes.ok) continue;
+      const sumData = (await summaryRes.json()) as {
+        pageid?: number;
+        title?: string;
+        description?: string;
+        extract?: string;
+        thumbnail?: { source?: string };
+        originalimage?: { source?: string };
+      };
+      const desc = (sumData.description || '').toLowerCase();
+      const extract = (sumData.extract || '').toLowerCase();
+      if (
+        !desc.includes('game') &&
+        !extract.includes('video game') &&
+        !extract.includes('playstation') &&
+        !extract.includes('nintendo') &&
+        !extract.includes('xbox') &&
+        !extract.includes('arcade')
+      ) {
+        continue;
+      }
+      const poster = sumData.originalimage?.source || sumData.thumbnail?.source || '';
+      if (!poster) continue;
+      const yearMatch = (sumData.description || sumData.extract || '').match(/\b(19\d\d|20\d\d)\b/);
+
+      results.push({
+        domain: 'play',
+        kind: 'game',
+        id: `wiki-game-os-${sumData.pageid || title}`,
+        source: 'wikipedia',
+        externalId: sumData.pageid || title,
+        title: (sumData.title || title).replace(/\s*\([^)]*video game\)$/i, '').replace(/\s*\([^)]*game\)$/i, ''),
+        subtitle: sumData.description || 'Console / Retro Game',
+        year: yearMatch ? Number(yearMatch[1]) : 2005,
+        mediaType: 'game',
+        genres: ['Video Game'],
+        rating: 4.7,
+        posterUrl: poster,
+        backdropUrl: poster,
+        overview: sumData.extract || sumData.description || '',
+        popularity: 50000,
+      });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 async function searchGames(query: string): Promise<LiveSearchResult[]> {
   const results: LiveSearchResult[] = [];
   try {
@@ -497,6 +564,13 @@ async function searchGames(query: string): Promise<LiveSearchResult[]> {
     }
   } catch {
     // ignore
+  }
+
+  const wikiGames = await searchWikipediaGames(query);
+  for (const wg of wikiGames) {
+    if (!results.some((r) => r.title.toLowerCase() === wg.title.toLowerCase())) {
+      results.push(wg);
+    }
   }
 
   const wikiGame = await searchWikipediaSummary(query, 'game');
