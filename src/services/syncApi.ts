@@ -1,4 +1,5 @@
 import type { CueStoreState } from '../types';
+import { resilientFetch } from '../utils/safeFetch';
 
 const SYNC_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const SYNC_CODE_REGEX = /^CUE-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
@@ -43,10 +44,14 @@ export async function pullCloudLibrary(code: string): Promise<PullSyncResult> {
   }
 
   try {
-    const res = await fetch(`/api/sync?code=${encodeURIComponent(normalized)}`, {
-      method: 'GET',
-      cache: 'no-store',
-    });
+    const res = await resilientFetch(
+      `/api/sync?code=${encodeURIComponent(normalized)}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+      },
+      { timeoutMs: 10000, retryOn429: false }
+    );
     const isJson = res.headers.get('content-type')?.includes('application/json');
     if (!isJson) {
       return {
@@ -90,11 +95,15 @@ export async function pushCloudLibrary(
   }
 
   try {
-    const res = await fetch('/api/sync', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: normalized, updatedAt, state }),
-    });
+    const res = await resilientFetch(
+      '/api/sync',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: normalized, updatedAt, state }),
+      },
+      { timeoutMs: 10000, retryOn429: false }
+    );
     const isJson = res.headers.get('content-type')?.includes('application/json');
     if (!isJson) {
       return {

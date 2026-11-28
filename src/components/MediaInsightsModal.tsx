@@ -1,6 +1,6 @@
 import { BookOpen, Clock, Flame, Gamepad2, Repeat, Trophy, Tv, X } from 'lucide-react';
 import { useCueStore } from '../store/useCueStore';
-import { computeAllMediaStats } from '../utils/stats';
+import { computeAllMediaStats, formatReadStatSummary } from '../utils/stats';
 
 export function MediaInsightsModal() {
   const { state, insightsOpen, setInsightsOpen, pushRoute } = useCueStore();
@@ -8,6 +8,11 @@ export function MediaInsightsModal() {
   if (!insightsOpen) return null;
 
   const stats = computeAllMediaStats(state);
+  const readSummary = formatReadStatSummary(
+    stats.readChaptersCount,
+    stats.readIssuesCount,
+    stats.readFinishedCount
+  );
   const maxGenreScore = Math.max(1, ...stats.topGenres.map((g) => g.score));
 
   return (
@@ -44,7 +49,9 @@ export function MediaInsightsModal() {
                 {stats.watchTimeLabel}
               </p>
               <p className="text-xs text-ink-faint mt-0.5 tabular-nums">
-                {stats.episodesWatchedCount.toLocaleString()} eps · {stats.moviesWatchedCount} movies
+                {stats.episodesWatchedCount.toLocaleString()}{' '}
+                {stats.episodesWatchedCount === 1 ? 'ep' : 'eps'} · {stats.moviesWatchedCount}{' '}
+                {stats.moviesWatchedCount === 1 ? 'movie' : 'movies'}
               </p>
             </div>
 
@@ -54,10 +61,10 @@ export function MediaInsightsModal() {
                 <span>Read Progress</span>
               </div>
               <p className="font-display font-bold text-2xl text-ink mt-1.5 tabular-nums">
-                {stats.readChaptersCount.toLocaleString()}ch
+                {readSummary.primary}
               </p>
               <p className="text-xs text-ink-faint mt-0.5 tabular-nums">
-                {stats.readIssuesCount} issues · {stats.readFinishedCount} finished
+                {readSummary.secondary}
               </p>
             </div>
 
@@ -92,24 +99,32 @@ export function MediaInsightsModal() {
             <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-dim mb-3">
               Top Genres Across All Media
             </h4>
-            <div className="space-y-3">
-              {stats.topGenres.map((g) => (
-                <div key={g.genre}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-ink">{g.genre}</span>
-                    <span className="text-ink-dim tabular-nums">{g.count} titles</span>
+            {stats.topGenres.length === 0 ? (
+              <p className="text-xs text-ink-dim">
+                Track titles across Watch, Read, or Play to see your top genres.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {stats.topGenres.map((g) => (
+                  <div key={g.genre}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-medium text-ink">{g.genre}</span>
+                      <span className="text-ink-dim tabular-nums">
+                        {g.count} {g.count === 1 ? 'title' : 'titles'}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/8 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-brand transition-all duration-500"
+                        style={{
+                          width: `${Math.max(12, Math.round((g.score / maxGenreScore) * 100))}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-white/8 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-brand transition-all duration-500"
-                      style={{
-                        width: `${Math.max(12, Math.round((g.score / maxGenreScore) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {stats.topRevisited.length > 0 && (

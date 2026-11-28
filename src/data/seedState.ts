@@ -5,6 +5,7 @@ import type {
   CustomList,
   GameItem,
   GameProgress,
+  HistoryEntry,
   JournalEntry,
   Movie,
   MovieProgress,
@@ -14,7 +15,7 @@ import type {
   ShowProgress,
   UpcomingEntry,
 } from '../types';
-import { getAllEpisodes, getEpisodeKey } from '../utils/stats';
+import { formatEpisodeCode, getAllEpisodes, getEpisodeKey } from '../utils/stats';
 
 const rawShows = generated.shows as Show[];
 const rawMovies = generated.movies as Movie[];
@@ -718,6 +719,86 @@ export function createSeedState(): CueStoreState {
     shows['house-of-the-dragon']?.cast?.[0]?.avatarUrl ||
     '';
 
+  const makeShowHistory = (
+    id: string,
+    showId: string,
+    epIndex: number,
+    loggedAt: string
+  ): HistoryEntry | null => {
+    const s = shows[showId];
+    if (!s) return null;
+    const eps = getAllEpisodes(s);
+    const ep = eps[Math.min(Math.max(0, epIndex), eps.length - 1)];
+    if (!ep) return null;
+    return {
+      id,
+      domain: 'watch',
+      mediaKind: 'show',
+      mediaId: s.id,
+      title: s.title,
+      posterUrl: s.posterUrl,
+      codeLabel: formatEpisodeCode(ep.season, ep.number),
+      subtitle: ep.title,
+      loggedAt,
+    };
+  };
+
+  const makeReadHistory = (
+    id: string,
+    readId: string,
+    codeLabel: string,
+    loggedAt: string
+  ): HistoryEntry | null => {
+    const r = readItems[readId];
+    if (!r) return null;
+    return {
+      id,
+      domain: 'read',
+      mediaKind: 'read',
+      mediaId: r.id,
+      title: r.title,
+      posterUrl: r.coverUrl,
+      codeLabel,
+      subtitle: r.creator,
+      loggedAt,
+    };
+  };
+
+  const makePlayHistory = (
+    id: string,
+    gameId: string,
+    codeLabel: string,
+    loggedAt: string
+  ): HistoryEntry | null => {
+    const g = games[gameId];
+    if (!g) return null;
+    const prog = gameProgress[gameId];
+    return {
+      id,
+      domain: 'play',
+      mediaKind: 'game',
+      mediaId: g.id,
+      title: g.title,
+      posterUrl: g.coverUrl,
+      codeLabel,
+      subtitle: `${prog?.platform || g.platforms[0] || 'PC'} · ${g.developer}`,
+      loggedAt,
+    };
+  };
+
+  const history: HistoryEntry[] = [
+    makeShowHistory('hist-w1', 'house-of-the-dragon', 18, hoursAgo(18)),
+    makeShowHistory('hist-w2', 'the-bear', 36, hoursAgo(14)),
+    makeShowHistory('hist-w3', 'severance', 14, hoursAgo(8)),
+    makeShowHistory('hist-w4', 'house-of-the-dragon', 19, hoursAgo(2)),
+    makeReadHistory('hist-r1', 'saga', 'Issue #48', hoursAgo(16)),
+    makeReadHistory('hist-r2', 'berserk', 'Ch. 214', hoursAgo(6)),
+    makeReadHistory('hist-r3', 'dune-book', 'Ch. 28', hoursAgo(3)),
+    makePlayHistory('hist-p1', 'hades-ii', '+1h · 24h', hoursAgo(19)),
+    makePlayHistory('hist-p2', 'baldurs-gate-3', '+1h · 88h', hoursAgo(11)),
+    makePlayHistory('hist-p3', 'elden-ring', '+1h · 64h', hoursAgo(4)),
+  ].filter((x): x is HistoryEntry => Boolean(x));
+
   return {
     shows,
     movies,
@@ -732,12 +813,17 @@ export function createSeedState(): CueStoreState {
     readProgress,
     gameProgress,
     upcoming,
-    history: [],
+    history,
     journalEntries,
     lists,
+    collectionRatings: {},
+    mindFeedback: {
+      dismissedIds: [],
+      dismissedGenres: {},
+      acceptedCount: 0,
+    },
     profile: {
       name: 'Alex',
-      handle: '@alex',
       bio: 'Private logbook for shows, movies, novels, manga, comics, and games.',
       avatarUrl: walterAvatar,
       bannerUrl: shows['breaking-bad']?.backdropUrl || shows['house-of-the-dragon']?.backdropUrl || '',
@@ -753,6 +839,56 @@ export function createSeedState(): CueStoreState {
       playFilter: 'all',
       sortBy: 'recent',
       showPosterProgress: true,
+      detailMode: 'simple',
+      cueMindIntroDismissed: false,
+      tmdbApiKey: '',
+    },
+  };
+}
+
+export function createEmptyState(): CueStoreState {
+  return {
+    shows: {},
+    movies: {},
+    readItems: {},
+    games: {},
+    showOrder: [],
+    movieOrder: [],
+    readOrder: [],
+    gameOrder: [],
+    showProgress: {},
+    movieProgress: {},
+    readProgress: {},
+    gameProgress: {},
+    upcoming: [],
+    history: [],
+    journalEntries: [],
+    lists: [],
+    collectionRatings: {},
+    mindFeedback: {
+      dismissedIds: [],
+      dismissedGenres: {},
+      acceptedCount: 0,
+    },
+    profile: {
+      name: 'You',
+      bio: 'Private logbook for shows, movies, novels, manga, comics, and games.',
+      avatarUrl: '',
+      bannerUrl: '',
+    },
+    notifications: [],
+    settings: {
+      accentColor: '#6EC5D4',
+      watchLayout: 'cards',
+      readLayout: 'cards',
+      playLayout: 'cards',
+      watchFilter: 'all',
+      readFilter: 'all',
+      playFilter: 'all',
+      sortBy: 'recent',
+      showPosterProgress: true,
+      detailMode: 'simple',
+      cueMindIntroDismissed: false,
       tmdbApiKey: '',
     },
   };

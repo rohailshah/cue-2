@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { buildPairingUrl, normalizeSyncCode } from '../services/syncApi';
-import { useCueStore } from '../store/useCueStore';
+import { useCueStore, useModalBackHandler } from '../store/useCueStore';
 
 interface DeviceSyncModalProps {
   open: boolean;
@@ -37,6 +37,8 @@ export function DeviceSyncModal({ open, onClose }: DeviceSyncModalProps) {
   const [working, setWorking] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copiedMode, setCopiedMode] = useState<'code' | 'link' | null>(null);
+
+  useModalBackHandler(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -85,7 +87,7 @@ export function DeviceSyncModal({ open, onClose }: DeviceSyncModalProps) {
     const res = await linkSyncCode(joinInput);
     setWorking(false);
     if (!res.ok) {
-      setLocalError(res.message ?? 'Failed to link sync code');
+      setLocalError(res.message);
       return;
     }
     setJoinInput('');

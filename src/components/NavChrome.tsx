@@ -4,6 +4,7 @@ import {
   Calendar,
   ChevronLeft,
   Gamepad2,
+  Layers,
   ListFilter,
   NotebookText,
   Search,
@@ -29,17 +30,19 @@ export function NavChrome() {
   const unreadCount = state.notifications.filter((n) => !n.read).length;
 
   const activeMainTab =
-    route.view === 'watch' || route.view === 'library-watch'
-      ? 'watch'
-      : route.view === 'read' || route.view === 'library-read'
-        ? 'read'
-        : route.view === 'play' || route.view === 'library-play'
-          ? 'play'
-          : route.view === 'journal'
-            ? 'journal'
-            : route.view === 'search'
-              ? 'search'
-              : null;
+    route.view === 'queue'
+      ? 'queue'
+      : route.view === 'watch' || route.view === 'library-watch'
+        ? 'watch'
+        : route.view === 'read' || route.view === 'library-read'
+          ? 'read'
+          : route.view === 'play' || route.view === 'library-play'
+            ? 'play'
+            : route.view === 'journal' || route.view === 'library-all'
+              ? 'journal'
+              : route.view === 'search'
+                ? 'search'
+                : null;
 
   const isDomainTab =
     route.view === 'watch' || route.view === 'read' || route.view === 'play';
@@ -47,6 +50,7 @@ export function NavChrome() {
   const isCalendarActive = isDomainTab && Boolean(route.calendarMode);
 
   const showMobileBottomNav =
+    route.view === 'queue' ||
     route.view === 'watch' ||
     route.view === 'read' ||
     route.view === 'play' ||
@@ -54,7 +58,7 @@ export function NavChrome() {
     route.view === 'search';
 
   const renderLeftDesktopAction = () => {
-    if (canGoBack && !isDomainTab && !isJournal && route.view !== 'search') {
+    if (canGoBack && !isDomainTab && !isJournal && route.view !== 'search' && route.view !== 'queue') {
       return (
         <button
           type="button"
@@ -130,6 +134,7 @@ export function NavChrome() {
   };
 
   const navItems = [
+    { id: 'queue' as const, label: 'Cue', Icon: Layers, activeColor: 'text-ink' },
     { id: 'watch' as const, label: 'Watch', Icon: Tv, activeColor: 'text-watch' },
     { id: 'read' as const, label: 'Read', Icon: BookOpen, activeColor: 'text-read' },
     { id: 'play' as const, label: 'Play', Icon: Gamepad2, activeColor: 'text-play' },
@@ -144,7 +149,7 @@ export function NavChrome() {
           {renderLeftDesktopAction()}
           <button
             type="button"
-            onClick={() => switchTab('watch', false)}
+            onClick={() => switchTab('queue', false)}
             className="hidden lg:inline-flex items-center px-2 py-1 rounded-lg hover:opacity-85 transition-opacity"
             aria-label="cue home"
           >
@@ -163,7 +168,7 @@ export function NavChrome() {
                 key={id}
                 type="button"
                 onClick={() => switchTab(id, false)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-medium transition-colors ${
                   active
                     ? `bg-white/[0.08] ${activeColor}`
                     : 'text-ink-dim hover:text-ink hover:bg-white/[0.04]'
@@ -198,9 +203,9 @@ export function NavChrome() {
       {showMobileBottomNav && (
         <nav
           aria-label="Mobile navigation"
-          className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none px-3.5 pb-5 pt-2 flex items-center justify-center gap-2.5"
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none px-3 pb-5 pt-2 flex items-center justify-center gap-2"
         >
-          <div className="pointer-events-auto glass-pill rounded-full p-1 flex items-center flex-1 max-w-[308px] justify-between">
+          <div className="pointer-events-auto glass-pill rounded-full p-1 flex items-center flex-1 max-w-[316px] justify-between">
             {navItems.map(({ id, label, Icon, activeColor }) => {
               const active = activeMainTab === id;
               return (
@@ -208,12 +213,12 @@ export function NavChrome() {
                   key={id}
                   type="button"
                   onClick={() => switchTab(id, false)}
-                  className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1.5 px-1.5 rounded-full transition-colors ${
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1.5 px-1 rounded-full transition-colors ${
                     active ? `bg-white/[0.08] ${activeColor}` : 'text-ink-dim hover:text-ink'
                   }`}
                 >
-                  <Icon className="w-[18px] h-[18px] mb-0.5" />
-                  <span className="text-[10.5px] font-medium leading-none truncate">{label}</span>
+                  <Icon className="w-[17px] h-[17px] mb-0.5" />
+                  <span className="text-[10px] font-medium leading-none truncate">{label}</span>
                 </button>
               );
             })}
@@ -223,11 +228,11 @@ export function NavChrome() {
             type="button"
             onClick={() => switchTab('search')}
             aria-label="Search catalog"
-            className={`pointer-events-auto glass-pill h-[52px] w-[52px] rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 ${
+            className={`pointer-events-auto glass-pill h-[50px] w-[50px] rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 ${
               activeMainTab === 'search' ? 'text-ink border-white/25' : 'text-ink-dim hover:text-ink'
             }`}
           >
-            <Search className="w-[19px] h-[19px]" />
+            <Search className="w-[18px] h-[18px]" />
           </button>
         </nav>
       )}

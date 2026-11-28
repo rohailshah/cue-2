@@ -15,6 +15,7 @@ export interface BingersMediaRowProps {
   isHistory?: boolean;
   isFlashing?: boolean;
   flashLabel?: string;
+  secondaryAction?: React.ReactNode;
   actionContent?: React.ReactNode;
   actionAriaLabel?: string;
   actionDisabled?: boolean;
@@ -37,6 +38,7 @@ export function BingersMediaRow({
   isHistory = false,
   isFlashing = false,
   flashLabel = 'Done',
+  secondaryAction,
   actionContent,
   actionAriaLabel,
   actionDisabled = false,
@@ -89,39 +91,39 @@ export function BingersMediaRow({
 
       {/* Right rounded surface card */}
       <div
-        className={`flex-1 min-w-0 min-h-[96px] sm:min-h-[102px] rounded-[18px] px-4 py-3 flex items-center justify-between gap-3 border transition-colors ${
+        className={`flex-1 min-w-0 min-h-[96px] sm:min-h-[102px] rounded-[18px] px-3.5 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2.5 sm:gap-3 border transition-colors ${
           isHistory
             ? 'bg-surface/60 border-white/[0.03] group-hover:bg-surface/85'
             : 'bg-surface border-white/[0.05] group-hover:bg-surface-raised'
         }`}
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h3
-              className={`text-[15px] font-semibold truncate leading-snug ${
-                isHistory ? 'text-ink/70' : 'text-ink'
-              }`}
-            >
-              {title}
-            </h3>
+          <h3
+            className={`text-[15px] font-semibold leading-[1.28] line-clamp-2 ${
+              isHistory ? 'text-ink/70' : 'text-ink'
+            }`}
+          >
+            {title}
+          </h3>
+
+          <div className="flex items-center gap-1.5 mt-1 min-w-0">
             {badgeLabel && (
               <span
-                className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${
+                className={`text-[9.5px] font-semibold uppercase tracking-wide px-1.5 py-[2px] rounded shrink-0 leading-none ${
                   badgeClassName || 'bg-white/8 text-ink-dim'
                 }`}
               >
                 {badgeLabel}
               </span>
             )}
+            <p
+              className={`text-[13px] tabular-nums truncate ${
+                isHistory ? 'text-ink-faint' : 'text-ink/85'
+              }`}
+            >
+              {primaryLine}
+            </p>
           </div>
-
-          <p
-            className={`text-[13px] tabular-nums mt-1 truncate ${
-              isHistory ? 'text-ink-faint' : 'text-ink/85'
-            }`}
-          >
-            {primaryLine}
-          </p>
 
           {secondaryLine && (
             <p
@@ -135,7 +137,12 @@ export function BingersMediaRow({
         </div>
 
         {/* Right action area */}
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-1.5">
+          {secondaryAction && !isHistory && (
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+              {secondaryAction}
+            </div>
+          )}
           {isHistory ? (
             <Check className="w-[18px] h-[18px] text-brand opacity-90" strokeWidth={2.5} />
           ) : actionContent ? (
@@ -166,7 +173,7 @@ export function BingersMediaRow({
 
       {/* Full-row solid flat completion flash banner */}
       {isFlashing && (
-        <div className="absolute inset-x-0 top-0 h-[96px] sm:h-[102px] z-20 rounded-[18px] bg-brand text-brand-ink flex flex-col items-center justify-center gap-1 animate-complete-flash pointer-events-none">
+        <div className="absolute inset-0 z-20 rounded-[18px] bg-brand text-brand-ink flex flex-col items-center justify-center gap-1 animate-complete-flash pointer-events-none">
           <Check className="w-5 h-5" strokeWidth={2.5} />
           <span className="text-[13.5px] font-semibold leading-none">{flashLabel}</span>
         </div>

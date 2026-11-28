@@ -38,7 +38,6 @@ export function FilterSortSheet({ domain }: { domain: MediaDomain }) {
     { value: 'all', label: 'All' },
     { value: 'tv', label: 'Shows' },
     { value: 'movie', label: 'Movies' },
-    { value: 'anime', label: 'Anime' },
   ];
 
   const readFilters: { value: ReadFilter; label: string }[] = [
@@ -53,6 +52,7 @@ export function FilterSortSheet({ domain }: { domain: MediaDomain }) {
     { value: 'playing', label: 'Playing' },
     { value: 'backlog', label: 'Backlog' },
     { value: 'completed', label: 'Completed' },
+    { value: 'dropped', label: 'Dropped' },
   ];
 
   const titleLabel =
@@ -118,7 +118,7 @@ export function FilterSortSheet({ domain }: { domain: MediaDomain }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-ink-dim mb-2.5">
             Category
           </p>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className={`grid ${domain === 'watch' ? 'grid-cols-3' : 'grid-cols-4'} gap-1.5`}>
             {domain === 'watch' &&
               watchFilters.map((opt) => (
                 <button

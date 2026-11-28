@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Film } from 'lucide-react';
 
 interface MediaImageProps {
@@ -21,6 +21,11 @@ export function MediaImage({
   const [useFallback, setUseFallback] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  useEffect(() => {
+    setUseFallback(false);
+    setFailed(false);
+  }, [src, fallbackSrc]);
+
   const activeSrc = useFallback ? fallbackSrc : src;
 
   if (!activeSrc || failed) {
@@ -42,6 +47,16 @@ export function MediaImage({
       alt={alt}
       loading="lazy"
       decoding="async"
+      referrerPolicy="no-referrer"
+      onLoad={(e) => {
+        if (e.currentTarget.naturalWidth <= 2 || e.currentTarget.naturalHeight <= 2) {
+          if (!useFallback && fallbackSrc && fallbackSrc !== src) {
+            setUseFallback(true);
+          } else {
+            setFailed(true);
+          }
+        }
+      }}
       onError={() => {
         if (!useFallback && fallbackSrc && fallbackSrc !== src) {
           setUseFallback(true);
@@ -49,7 +64,7 @@ export function MediaImage({
           setFailed(true);
         }
       }}
-      className={`object-cover ${className}`}
+      className={className}
     />
   );
 }

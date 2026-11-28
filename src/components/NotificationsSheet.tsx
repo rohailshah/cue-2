@@ -60,39 +60,48 @@ export function NotificationsSheet() {
             <span>Test live release alert banner</span>
           </button>
 
-          {state.notifications.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              onClick={() => {
-                setNotificationsOpen(false);
-                if (n.mediaKind === 'show' && n.mediaId) {
-                  pushRoute({ view: 'show-detail', showId: n.mediaId });
-                } else if (n.mediaKind === 'movie' && n.mediaId) {
-                  pushRoute({ view: 'movie-detail', movieId: n.mediaId });
-                } else if (n.mediaKind === 'read' && n.mediaId) {
-                  pushRoute({ view: 'read-detail', readId: n.mediaId });
-                } else if (n.mediaKind === 'game' && n.mediaId) {
-                  pushRoute({ view: 'game-detail', gameId: n.mediaId });
-                }
-              }}
-              className={`w-full text-left flex items-start gap-3 p-3.5 rounded-2xl border transition-colors ${
-                n.read
-                  ? 'bg-background border-white/6 opacity-80 hover:opacity-100'
-                  : 'bg-surface-raised border-white/12'
-              }`}
-            >
-              <CueIcon size={34} className="rounded-lg mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-ink truncate">{n.title}</p>
-                  <span className="text-[11px] text-ink-dim shrink-0">{n.timeLabel}</span>
+          {state.notifications.length === 0 ? (
+            <div className="rounded-2xl bg-background border border-white/6 p-6 text-center">
+              <p className="text-sm font-semibold text-ink">No release alerts yet</p>
+              <p className="text-xs text-ink-dim mt-1">
+                New release notifications will show up here as you build your library.
+              </p>
+            </div>
+          ) : (
+            state.notifications.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => {
+                  setNotificationsOpen(false);
+                  if (n.mediaKind === 'show' && n.mediaId) {
+                    pushRoute({ view: 'show-detail', showId: n.mediaId });
+                  } else if (n.mediaKind === 'movie' && n.mediaId) {
+                    pushRoute({ view: 'movie-detail', movieId: n.mediaId });
+                  } else if (n.mediaKind === 'read' && n.mediaId) {
+                    pushRoute({ view: 'read-detail', readId: n.mediaId });
+                  } else if (n.mediaKind === 'game' && n.mediaId) {
+                    pushRoute({ view: 'game-detail', gameId: n.mediaId });
+                  }
+                }}
+                className={`w-full text-left flex items-start gap-3 p-3.5 rounded-2xl border transition-colors ${
+                  n.read
+                    ? 'bg-background border-white/6 opacity-80 hover:opacity-100'
+                    : 'bg-surface-raised border-white/12'
+                }`}
+              >
+                <CueIcon size={34} className="rounded-lg mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-ink truncate">{n.title}</p>
+                    <span className="text-[11px] text-ink-dim shrink-0">{n.timeLabel}</span>
+                  </div>
+                  <p className="text-[13px] text-ink-dim mt-0.5 leading-snug">{n.body}</p>
                 </div>
-                <p className="text-[13px] text-ink-dim mt-0.5 leading-snug">{n.body}</p>
-              </div>
-              {!n.read && <span className="h-2 w-2 rounded-full bg-watch mt-2 shrink-0" />}
-            </button>
-          ))}
+                {!n.read && <span className="h-2 w-2 rounded-full bg-watch mt-2 shrink-0" />}
+              </button>
+            ))
+          )}
         </div>
       </div>
     </div>
