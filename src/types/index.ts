@@ -1,6 +1,7 @@
 export type MediaDomain = 'watch' | 'read' | 'play';
 export type ReadFormat = 'novel' | 'manga' | 'comic';
 export type ReadUnit = 'chapters' | 'issues';
+export type ComicEditionId = 'digital' | 'tpb' | 'compact' | 'hardcover' | 'absolute';
 export type GamePlatform = 'PC' | 'PS5' | 'Switch' | 'Xbox' | 'Steam Deck';
 
 export type ShowWatchStatus = 'watching' | 'not_started' | 'finished';
@@ -83,6 +84,9 @@ export interface ReadItem {
   coverUrl: string;
   backdropUrl: string;
   overview: string;
+  editionCovers?: Partial<Record<ComicEditionId, string>>;
+  editionIssueCounts?: Partial<Record<ComicEditionId, number>>;
+  baseTotalUnits?: number;
 }
 
 export interface GameItem {
@@ -121,8 +125,10 @@ export interface MovieProgress {
 export interface ReadProgress {
   status: ReadWatchStatus;
   currentUnit: number;
+  maxCompletedUnit?: number;
   rereadCount: number;
   bookmarked: boolean;
+  edition?: ComicEditionId;
   lastReadAt?: string;
   rating?: number;
   mood?: PersonalMood;
@@ -152,6 +158,18 @@ export interface UpcomingEntry {
   daysUntil: number;
   groupCount?: number;
   artworkUrl: string;
+}
+
+export interface HistoryEntry {
+  id: string;
+  domain: MediaDomain;
+  mediaKind: 'show' | 'movie' | 'read' | 'game';
+  mediaId: string;
+  title: string;
+  posterUrl: string;
+  codeLabel: string;
+  subtitle: string;
+  loggedAt: string;
 }
 
 export interface JournalEntry {
@@ -243,6 +261,7 @@ export interface CueStoreState {
   readProgress: Record<string, ReadProgress>;
   gameProgress: Record<string, GameProgress>;
   upcoming: UpcomingEntry[];
+  history: HistoryEntry[];
   journalEntries: JournalEntry[];
   lists: CustomList[];
   profile: UserProfile;
