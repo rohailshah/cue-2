@@ -70,6 +70,7 @@ export function CueMindCard({
     updateSettings,
     showToast,
     addLiveShowToStore,
+    addLiveAnimeToStore,
     addLiveMovieToStore,
     addLiveReadToStore,
     addLiveGameToStore,
@@ -209,6 +210,13 @@ export function CueMindCard({
         addLiveGameToStore(state.games[game.id] || game, 'backlog', andAdd);
         if (andAdd) recordMindDiscoverAccept(item.genres);
         else pushRoute({ view: 'game-detail', gameId: game.id });
+        return;
+      }
+      if (item.mediaType === 'anime') {
+        const anime = state.animes[item.id] || (await hydrateLiveShow(item, state.settings.tmdbApiKey));
+        addLiveAnimeToStore(anime, andAdd);
+        if (andAdd) recordMindDiscoverAccept(item.genres);
+        else pushRoute({ view: 'anime-detail', animeId: anime.id });
         return;
       }
       const show = state.shows[item.id] || (await hydrateLiveShow(item, state.settings.tmdbApiKey));

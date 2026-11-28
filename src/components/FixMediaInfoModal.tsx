@@ -55,7 +55,7 @@ export function FixMediaInfoModal({
 }: {
   open: boolean;
   onClose: () => void;
-  kind: 'read' | 'show' | 'game' | 'movie';
+  kind: 'read' | 'show' | 'anime' | 'game' | 'movie';
   title: string;
   creator?: string;
   year?: number;

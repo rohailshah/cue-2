@@ -131,19 +131,54 @@ export function exportLibraryCsv(state: CueStoreState, scope: ExportScope = 'all
       }
       const watchedEps = countWatchedEpisodes(s, p?.episodeCounts);
       const totalEps = Math.max(s.totalEpisodes || 0, watchedEps);
-      const isAnime =
-        s.mediaType === 'anime' || s.genres.some((g) => g.toLowerCase() === 'anime');
       const col = p?.collection;
       rows.push({
         domainOrder: 0,
         title: s.title,
         cells: [
           'Watch',
-          isAnime ? 'Anime' : 'TV Show',
+          'TV Show',
           s.network || '',
           '',
           s.title,
           s.year || '',
+          showStatusLabel(p?.status),
+          totalEps > 0 ? `${watchedEps}/${totalEps} eps` : '',
+          p?.rating ? p.rating : '',
+          isoToYmd(p?.finishedAt || p?.lastWatchedAt),
+          p?.completedRuns?.length || (p?.status === 'finished' ? 1 : ''),
+          ownershipLabel(p?.ownership, 'owned'),
+          ownershipLabel(p?.ownership, 'wishlist'),
+          col?.format || '',
+          formatPrice(col),
+          isoToYmd(col?.acquiredAt),
+          col?.owner || '',
+          col?.includes || '',
+          col?.notes || '',
+        ],
+      });
+    }
+
+    for (const id of state.animeOrder) {
+      const a = state.animes[id];
+      const p = state.animeProgress[id];
+      if (!a) continue;
+      if (!p?.bookmarked && !p?.ownership && p?.status !== 'watching' && p?.status !== 'finished') {
+        continue;
+      }
+      const watchedEps = countWatchedEpisodes(a as any, p?.episodeCounts);
+      const totalEps = Math.max(a.totalEpisodes || 0, watchedEps);
+      const col = p?.collection;
+      rows.push({
+        domainOrder: 0,
+        title: a.title,
+        cells: [
+          'Watch',
+          'Anime',
+          a.network || '',
+          '',
+          a.title,
+          a.year || '',
           showStatusLabel(p?.status),
           totalEps > 0 ? `${watchedEps}/${totalEps} eps` : '',
           p?.rating ? p.rating : '',
@@ -502,6 +537,40 @@ export function exportFinishedLogTxt(state: CueStoreState): string {
         p.finishedAt || p.lastWatchedAt,
         '📺',
         s.title,
+        p.rating
+      );
+    }
+  }
+
+  for (const id of state.animeOrder) {
+    const a = state.animes[id];
+    const p = state.animeProgress[id];
+    if (!a || !p) continue;
+
+    const seasonEntries = Object.entries(p.seasonFinishedAt || {}).sort(
+      (a, b) => Number(a[0]) - Number(b[0])
+    );
+    if (seasonEntries.length > 0) {
+      for (let i = 0; i < seasonEntries.length; i++) {
+        const [sNumStr, iso] = seasonEntries[i];
+        const ymd = isoToYmd(iso);
+        if (!ymd) continue;
+        const sNum = Number(sNumStr);
+        const sRating = p.seasonRatings?.[sNum] ?? (i === seasonEntries.length - 1 ? p.rating : undefined);
+        events.push({
+          ymd,
+          emoji: '🎌',
+          title: `${a.title} (season ${sNum})`,
+          rating: sRating,
+        });
+      }
+    } else if (p.status === 'finished' || (p.completedRuns && p.completedRuns.length > 0)) {
+      pushRunsOrPrimary(
+        events,
+        p.completedRuns,
+        p.finishedAt || p.lastWatchedAt,
+        '🎌',
+        a.title,
         p.rating
       );
     }

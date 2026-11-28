@@ -1,4 +1,5 @@
 import type {
+  Anime,
   CueStoreState,
   GameItem,
   GamePlatform,
@@ -36,7 +37,7 @@ export interface ResolvedImdbTitle {
 
 export interface ImportCandidate {
   tempId: string;
-  kind: 'show' | 'movie' | 'read' | 'game';
+  kind: 'show' | 'anime' | 'movie' | 'read' | 'game';
   domain: 'watch' | 'read' | 'play';
   mediaType: 'tv' | 'anime' | 'movie' | 'novel' | 'manga' | 'comic' | 'game';
   title: string;
@@ -83,6 +84,7 @@ export interface PreparedImportEntry {
   candidate: ImportCandidate;
   selected: boolean;
   show?: Show;
+  anime?: Anime;
   movie?: Movie;
   read?: ReadItem;
   game?: GameItem;
@@ -2744,7 +2746,7 @@ export function annotateImportDuplicates(
   });
 }
 
-export function buildFallbackShow(c: ImportCandidate): Show {
+export function buildFallbackShow(c: ImportCandidate): Show | Anime {
   const id = slugifyImportId('imp-show', c.title, c.externalConst);
   const runtime = c.runtime || 45;
   const poster = c.posterUrl || '';
@@ -2777,13 +2779,12 @@ export function buildFallbackShow(c: ImportCandidate): Show {
       ],
     };
   });
-  return {
+  const base = {
     id,
     title: c.title,
     year: c.year,
     genres: baseGenres,
     rating: c.communityRating || 7.8,
-    mediaType: 'tv',
     posterUrl: poster,
     backdropUrl: poster,
     overview: c.overview || `${c.title} (${c.year}).`,
@@ -2793,6 +2794,10 @@ export function buildFallbackShow(c: ImportCandidate): Show {
     seasons,
     cast: [],
   };
+  if (c.mediaType === 'anime') {
+    return { ...base, mediaType: 'anime' as const };
+  }
+  return { ...base, mediaType: 'tv' as const };
 }
 
 export function buildFallbackMovie(c: ImportCandidate): Movie {

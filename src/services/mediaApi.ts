@@ -1,4 +1,5 @@
 import type {
+  Anime,
   CastMember,
   ComicEditionFormat,
   ComicEditionId,
@@ -4352,7 +4353,7 @@ export async function testTmdbConnection(apiKey: string): Promise<boolean> {
   return res.ok;
 }
 
-export async function hydrateLiveShow(item: LiveSearchResult, tmdbApiKey?: string): Promise<Show> {
+export async function hydrateLiveShow(item: LiveSearchResult, tmdbApiKey?: string): Promise<Show | Anime> {
   if (item.source === 'tmdb') {
     return hydrateTmdbShow(item, tmdbApiKey);
   }
@@ -5323,7 +5324,7 @@ async function hydrateTvMazeShow(item: LiveSearchResult): Promise<Show> {
   const res = await fetch(
     `https://api.tvmaze.com/shows/${item.externalId}?embed[]=episodes&embed[]=cast`
   );
-  if (!res.ok) return fallbackShowFromSearch(item);
+  if (!res.ok) return fallbackShowFromSearch(item) as Show;
   const data = await res.json();
   let backdropUrl = item.backdropUrl || item.posterUrl;
   try {
@@ -5400,7 +5401,7 @@ async function hydrateTvMazeShow(item: LiveSearchResult): Promise<Show> {
   };
 }
 
-async function hydrateTmdbShow(item: LiveSearchResult, apiKey?: string): Promise<Show> {
+async function hydrateTmdbShow(item: LiveSearchResult, apiKey?: string): Promise<Show | Anime> {
   const cleanKey = apiKey?.trim();
   let data: {
     name?: string;
@@ -5595,14 +5596,13 @@ export async function fetchTvmazeEpisodeSchedule(
   }
 }
 
-function fallbackShowFromSearch(item: LiveSearchResult): Show {
-  return {
+function fallbackShowFromSearch(item: LiveSearchResult): Show | Anime {
+  const base = {
     id: item.id,
     title: item.title,
     year: item.year,
     genres: item.genres,
     rating: item.rating,
-    mediaType: item.mediaType === 'anime' ? 'anime' : 'tv',
     posterUrl: item.posterUrl,
     backdropUrl: item.backdropUrl || item.posterUrl,
     overview: item.overview,
@@ -5625,6 +5625,10 @@ function fallbackShowFromSearch(item: LiveSearchResult): Show {
     ],
     cast: [],
   };
+  if (item.mediaType === 'anime') {
+    return { ...base, mediaType: 'anime' as const };
+  }
+  return { ...base, mediaType: 'tv' as const };
 }
 
 export function hydrateLiveMovie(item: LiveSearchResult): Movie {
@@ -5848,23 +5852,44 @@ export async function enrichImportCandidate(
       const hits = await searchLiveMedia(candidate.title, 'tv', tmdbApiKey);
       const best = pickBestMatch(hits, 'show');
       if (best) {
-        const show = await hydrateLiveShow(best, tmdbApiKey);
+        const hydrated = await hydrateLiveShow(best, tmdbApiKey);
+        if (hydrated.mediaType === 'anime') {
+          return {
+            candidate: { ...candidate, mediaType: 'anime' },
+            selected: !candidate.existingId,
+            anime: {
+              ...hydrated,
+              posterUrl: hydrated.posterUrl || candidate.posterUrl || '',
+              backdropUrl: hydrated.backdropUrl || candidate.posterUrl || '',
+              genres: hydrated.genres.length > 0 ? hydrated.genres : candidate.genres,
+              rating: hydrated.rating || candidate.communityRating || 7.8,
+            },
+          };
+        }
         return {
-          candidate: { ...candidate, mediaType: show.mediaType },
+          candidate: { ...candidate, mediaType: 'tv' },
           selected: !candidate.existingId,
           show: {
-            ...show,
-            posterUrl: show.posterUrl || candidate.posterUrl || '',
-            backdropUrl: show.backdropUrl || candidate.posterUrl || '',
-            genres: show.genres.length > 0 ? show.genres : candidate.genres,
-            rating: show.rating || candidate.communityRating || 7.8,
+            ...hydrated,
+            posterUrl: hydrated.posterUrl || candidate.posterUrl || '',
+            backdropUrl: hydrated.backdropUrl || candidate.posterUrl || '',
+            genres: hydrated.genres.length > 0 ? hydrated.genres : candidate.genres,
+            rating: hydrated.rating || candidate.communityRating || 7.8,
           },
+        };
+      }
+      const fallback = buildFallbackShow(candidate);
+      if (fallback.mediaType === 'anime') {
+        return {
+          candidate,
+          selected: !candidate.existingId,
+          anime: fallback,
         };
       }
       return {
         candidate,
         selected: !candidate.existingId,
-        show: buildFallbackShow(candidate),
+        show: fallback,
       };
     }
 
@@ -6201,8 +6226,12 @@ export async function fetchLiveMangaChapterCount(
 
 export function buildFallbackPreparedEntry(candidate: ImportCandidate): PreparedImportEntry {
   const selected = !candidate.existingId;
-  if (candidate.kind === 'show') {
-    return { candidate, selected, show: buildFallbackShow(candidate) };
+  if (candidate.kind === 'show' || candidate.kind === 'anime') {
+    const fallback = buildFallbackShow(candidate);
+    if (fallback.mediaType === 'anime') {
+      return { candidate, selected, anime: fallback };
+    }
+    return { candidate, selected, show: fallback };
   }
   if (candidate.kind === 'movie') {
     return { candidate, selected, movie: buildFallbackMovie(candidate) };

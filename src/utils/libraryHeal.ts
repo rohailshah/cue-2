@@ -100,7 +100,7 @@ export function checkImageLoads(url: string, timeoutMs = 4500): Promise<boolean>
 export async function scanAndRepairLibrary(
   state: CueStoreState,
   patchMediaMetadata: (
-    kind: 'show' | 'movie' | 'read' | 'game',
+    kind: 'show' | 'anime' | 'movie' | 'read' | 'game',
     id: string,
     patch: {
       posterUrl?: string;
@@ -112,7 +112,7 @@ export async function scanAndRepairLibrary(
   onProgress?: (p: LibraryRepairProgress) => void
 ): Promise<LibraryRepairSummary> {
   interface Candidate {
-    kind: 'show' | 'movie' | 'read' | 'game';
+    kind: 'show' | 'anime' | 'movie' | 'read' | 'game';
     id: string;
     title: string;
     mediaType: 'tv' | 'anime' | 'movie' | 'novel' | 'manga' | 'comic' | 'game';
@@ -129,8 +129,20 @@ export async function scanAndRepairLibrary(
       kind: 'show',
       id,
       title: s.title,
-      mediaType: s.mediaType,
+      mediaType: 'tv',
       url: s.posterUrl,
+    });
+  }
+
+  for (const id of state.animeOrder) {
+    const a = state.animes[id];
+    if (!a || !state.animeProgress[id]?.bookmarked) continue;
+    candidates.push({
+      kind: 'anime',
+      id,
+      title: a.title,
+      mediaType: 'anime',
+      url: a.posterUrl,
     });
   }
 

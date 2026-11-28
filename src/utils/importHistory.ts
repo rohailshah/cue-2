@@ -1,4 +1,5 @@
 import type {
+  AnimeProgress,
   CueStoreState,
   GameProgress,
   MovieProgress,
@@ -20,12 +21,14 @@ export interface ImportBatchRecord {
   updatedCount: number;
   skippedCount: number;
   addedShowIds: string[];
+  addedAnimeIds: string[];
   addedMovieIds: string[];
   addedReadIds: string[];
   addedGameIds: string[];
   addedHistoryIds: string[];
   prevReadItems?: Record<string, ReadItem>;
   prevShowProgress?: Record<string, ShowProgress | null>;
+  prevAnimeProgress?: Record<string, AnimeProgress | null>;
   prevMovieProgress?: Record<string, MovieProgress | null>;
   prevReadProgress?: Record<string, ReadProgress | null>;
   prevGameProgress?: Record<string, GameProgress | null>;
@@ -129,6 +132,7 @@ export function rollbackImportRecord(
   }
 
   const removeShows = new Set(record.addedShowIds);
+  const removeAnimes = new Set(record.addedAnimeIds || []);
   const removeMovies = new Set(record.addedMovieIds);
   const removeReads = new Set(record.addedReadIds);
   const removeGames = new Set(record.addedGameIds);
@@ -143,6 +147,16 @@ export function rollbackImportRecord(
       removedCount += 1;
     }
     delete nextShowProgress[id];
+  }
+
+  const nextAnimes = { ...state.animes };
+  const nextAnimeProgress = { ...state.animeProgress };
+  for (const id of removeAnimes) {
+    if (nextAnimes[id]) {
+      delete nextAnimes[id];
+      removedCount += 1;
+    }
+    delete nextAnimeProgress[id];
   }
 
   const nextMovies = { ...state.movies };
@@ -183,11 +197,13 @@ export function rollbackImportRecord(
   }
 
   const restoredShowProg = restoreMapRecords(nextShowProgress, record.prevShowProgress);
+  const restoredAnimeProg = restoreMapRecords(nextAnimeProgress, record.prevAnimeProgress);
   const restoredMovieProg = restoreMapRecords(nextMovieProgress, record.prevMovieProgress);
   const restoredReadProg = restoreMapRecords(nextReadProgress, record.prevReadProgress);
   const restoredGameProg = restoreMapRecords(nextGameProgress, record.prevGameProgress);
   restoredCount =
     restoredShowProg.restoredCount +
+    restoredAnimeProg.restoredCount +
     restoredMovieProg.restoredCount +
     restoredReadProg.restoredCount +
     restoredGameProg.restoredCount;
@@ -195,14 +211,17 @@ export function rollbackImportRecord(
   const nextState: CueStoreState = {
     ...state,
     shows: nextShows,
+    animes: nextAnimes,
     movies: nextMovies,
     readItems: nextReadItems,
     games: nextGames,
     showOrder: state.showOrder.filter((id) => !removeShows.has(id)),
+    animeOrder: state.animeOrder.filter((id) => !removeAnimes.has(id)),
     movieOrder: state.movieOrder.filter((id) => !removeMovies.has(id)),
     readOrder: state.readOrder.filter((id) => !removeReads.has(id)),
     gameOrder: state.gameOrder.filter((id) => !removeGames.has(id)),
     showProgress: restoredShowProg.next,
+    animeProgress: restoredAnimeProg.next,
     movieProgress: restoredMovieProg.next,
     readProgress: restoredReadProg.next,
     gameProgress: restoredGameProg.next,

@@ -82,6 +82,7 @@ export interface AtomicReadRecord {
 export type GamePlatform = 'PC' | 'PS5' | 'Switch' | 'Xbox' | 'Steam Deck';
 
 export type ShowWatchStatus = 'watching' | 'not_started' | 'finished';
+export type AnimeWatchStatus = ShowWatchStatus;
 export type MovieWatchStatus = 'watchlist' | 'watched' | 'coming_soon';
 export type ReadWatchStatus = 'reading' | 'want_to_read' | 'finished';
 export type GameWatchStatus = 'playing' | 'backlog' | 'completed' | 'dropped';
@@ -121,7 +122,7 @@ export interface Show {
   year: number;
   genres: string[];
   rating: number;
-  mediaType: 'tv' | 'anime';
+  mediaType: 'tv';
   posterUrl: string;
   backdropUrl: string;
   overview: string;
@@ -130,6 +131,28 @@ export interface Show {
   totalEpisodes: number;
   seasons: Season[];
   cast: CastMember[];
+}
+
+export interface Anime {
+  id: string;
+  anilistId?: number;
+  malId?: number;
+  tmdbId?: number;
+  title: string;
+  year: number;
+  genres: string[];
+  rating: number;
+  mediaType: 'anime';
+  posterUrl: string;
+  backdropUrl: string;
+  overview: string;
+  runtimeAvg: number;
+  network?: string;
+  totalEpisodes: number;
+  seasons: Season[];
+  cast: CastMember[];
+  format?: 'TV' | 'Movie' | 'OVA' | 'ONA' | 'Special' | 'Music';
+  source?: string;
 }
 
 export interface Movie {
@@ -243,6 +266,27 @@ export interface ShowProgress {
   mood?: PersonalMood;
 }
 
+export interface AnimeProgress {
+  status: AnimeWatchStatus;
+  /** Map of "S01E01" -> watch count (0 or absent = unwatched, 1 = watched, 2+ = rewatched) */
+  episodeCounts: Record<string, number>;
+  bookmarked: boolean;
+  notifications: boolean;
+  lastWatchedAt?: string;
+  finishedAt?: string;
+  completedRuns?: CompletionRun[];
+  rating?: number;
+  ratingSource?: RatingSource;
+  episodeRatings?: Record<string, number>;
+  episodeFinishedAt?: Record<string, string>;
+  seasonRatings?: Record<number, number>;
+  seasonRatingSource?: Record<number, RatingSource>;
+  seasonFinishedAt?: Record<number, string>;
+  ownership?: OwnershipStatus;
+  collection?: CollectionDetails;
+  mood?: PersonalMood;
+}
+
 export interface MovieProgress {
   status: MovieWatchStatus;
   watchCount: number;
@@ -320,7 +364,7 @@ export interface UpcomingEntry {
 export interface HistoryEntry {
   id: string;
   domain: MediaDomain;
-  mediaKind: 'show' | 'movie' | 'read' | 'game';
+  mediaKind: 'show' | 'anime' | 'movie' | 'read' | 'game';
   mediaId: string;
   title: string;
   posterUrl: string;
@@ -332,7 +376,7 @@ export interface HistoryEntry {
 export interface JournalEntry {
   id: string;
   domain: MediaDomain;
-  mediaKind: 'show' | 'movie' | 'novel' | 'manga' | 'comic' | 'game';
+  mediaKind: 'show' | 'anime' | 'movie' | 'novel' | 'manga' | 'comic' | 'game';
   mediaId: string;
   mediaTitle: string;
   mediaPoster: string;
@@ -356,7 +400,7 @@ export interface CustomList {
   id: string;
   name: string;
   description: string;
-  items: { kind: 'show' | 'movie' | 'read' | 'game'; id: string }[];
+  items: { kind: 'show' | 'anime' | 'movie' | 'read' | 'game'; id: string }[];
   isOrdered?: boolean;
   steps?: CustomListStep[];
   pinnedToQueue?: boolean;
@@ -378,13 +422,13 @@ export interface AppNotification {
   body: string;
   timeLabel: string;
   read: boolean;
-  mediaKind?: 'show' | 'movie' | 'read' | 'game';
+  mediaKind?: 'show' | 'anime' | 'movie' | 'read' | 'game';
   mediaId?: string;
 }
 
 export type LayoutMode = 'cards' | 'posters';
 export type SortMode = 'recent' | 'alpha' | 'progress' | 'rating';
-export type WatchFilter = 'all' | 'tv' | 'movie' | 'anime';
+export type WatchFilter = 'all' | 'tv' | 'anime' | 'movie';
 export type ReadFilter = 'all' | 'novel' | 'manga' | 'comic';
 export type PlayFilter = 'all' | 'playing' | 'backlog' | 'completed' | 'dropped';
 
@@ -421,6 +465,7 @@ export type RouteView =
   | { view: 'journal' }
   | { view: 'search'; subView?: 'rail' | 'collection' | 'collections' }
   | { view: 'show-detail'; showId: string }
+  | { view: 'anime-detail'; animeId: string }
   | { view: 'movie-detail'; movieId: string }
   | { view: 'read-detail'; readId: string }
   | { view: 'read-editions'; readId: string }
@@ -433,14 +478,17 @@ export type RouteView =
 
 export interface CueStoreState {
   shows: Record<string, Show>;
+  animes: Record<string, Anime>;
   movies: Record<string, Movie>;
   readItems: Record<string, ReadItem>;
   games: Record<string, GameItem>;
   showOrder: string[];
+  animeOrder: string[];
   movieOrder: string[];
   readOrder: string[];
   gameOrder: string[];
   showProgress: Record<string, ShowProgress>;
+  animeProgress: Record<string, AnimeProgress>;
   movieProgress: Record<string, MovieProgress>;
   readProgress: Record<string, ReadProgress>;
   gameProgress: Record<string, GameProgress>;

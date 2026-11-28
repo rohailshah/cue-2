@@ -50,6 +50,8 @@ import type {
   Season,
   Show,
   ShowProgress,
+  Anime,
+  AnimeProgress,
   UserProfile,
 } from '../types';
 import {
@@ -170,17 +172,46 @@ function normalizeLoadedCueState(raw: CueStoreState): CueStoreState {
   if (raw.settings?.watchFilter === 'anime') {
     raw.settings.watchFilter = 'tv';
   }
+
+  // Migrate anime from shows to animes if not already separated
+  if (!raw.animes) {
+    raw.animes = {};
+    raw.animeOrder = [];
+    raw.animeProgress = {};
+  }
   if (raw.shows) {
-    for (const show of Object.values(raw.shows)) {
-      if (show && show.mediaType === 'anime') {
-        show.mediaType = 'tv';
-        const hasAnimeGenre = (show.genres || []).some((g) => g.toLowerCase() === 'anime');
-        if (!hasAnimeGenre) {
-          show.genres = ['Anime', ...(show.genres || [])];
-        }
+    const animeIds: string[] = [];
+    for (const [id, show] of Object.entries(raw.shows)) {
+      if (show && (show as any).mediaType === 'anime') {
+        animeIds.push(id);
       }
     }
+    for (const id of animeIds) {
+      const show = raw.shows[id];
+      if (show) {
+        raw.animes[id] = show as any;
+        raw.animeOrder.push(id);
+        if (raw.showProgress?.[id]) {
+          raw.animeProgress[id] = raw.showProgress[id];
+        }
+        delete raw.shows[id];
+        if (raw.showProgress) delete raw.showProgress[id];
+      }
+    }
+    // Rebuild showOrder without anime
+    if (raw.showOrder) {
+      raw.showOrder = raw.showOrder.filter((id) => !animeIds.includes(id));
+    }
   }
+  // Ensure animeOrder exists
+  if (!raw.animeOrder) {
+    raw.animeOrder = Object.keys(raw.animes || {});
+  }
+  // Ensure animeProgress exists
+  if (!raw.animeProgress) {
+    raw.animeProgress = {};
+  }
+
   return raw;
 }
 
@@ -210,6 +241,7 @@ function loadInitialState(): CueStoreState {
         };
       }
       if (v2.showProgress) empty.showProgress = { ...empty.showProgress, ...v2.showProgress };
+      if (v2.animeProgress) empty.animeProgress = { ...empty.animeProgress, ...v2.animeProgress };
       if (v2.movieProgress) empty.movieProgress = { ...empty.movieProgress, ...v2.movieProgress };
       if (v2.gameProgress) empty.gameProgress = { ...empty.gameProgress, ...v2.gameProgress };
       return empty;
@@ -259,14 +291,14 @@ export interface ReleaseBannerData {
 export interface CatchUpPromptItem {
   id: string;
   mediaKey: string;
-  kind: 'show' | 'read';
+  kind: 'show' | 'anime' | 'read';
   mediaId: string;
   title: string;
   count: number;
   unitSingular: 'episode' | 'issue' | 'chapter';
   unitPlural: 'episodes' | 'issues' | 'chapters';
   verbPast: 'watched' | 'read';
-  mediaNoun: 'show' | 'comic' | 'manga' | 'book';
+  mediaNoun: 'show' | 'anime' | 'comic' | 'manga' | 'book';
   episodeTargets?: Array<{ season: number; number: number }>;
   readUnitTargets?: number[];
 }
@@ -352,6 +384,52 @@ interface CueContextValue {
   ) => void;
   updateShowMetadata: (
     showId: string,
+    patch: {
+      title?: string;
+      year?: number;
+      posterUrl?: string;
+      totalEpisodes?: number;
+    }
+  ) => void;
+
+  // Anime actions (mirror show actions)
+  watchNextEpisodeAnime: (animeId: string) => void;
+  toggleEpisodeWatchedAnime: (animeId: string, season: number, number: number) => void;
+  incrementEpisodeRewatchAnime: (animeId: string, season: number, number: number, delta: number) => void;
+  toggleAnimeBookmark: (animeId: string) => void;
+  toggleAnimeNotifications: (animeId: string) => void;
+  markAnimeSeasonWatched: (animeId: string, seasonNumber: number, rewatchIfDone?: boolean) => void;
+  markAnimeAllWatched: (animeId: string) => void;
+  startAnimeRewatch: (animeId: string) => void;
+  resetAnimeProgress: (animeId: string) => void;
+  rateAnime: (animeId: string, rating: number | undefined, source?: RatingSource) => void;
+  setAnimeMood: (animeId: string, mood: PersonalMood | undefined) => void;
+  rateAnimeEpisode: (animeId: string, season: number, number: number, rating: number | undefined) => void;
+  rateAnimeSeason: (
+    animeId: string,
+    seasonNumber: number,
+    rating: number | undefined,
+    source?: RatingSource
+  ) => void;
+  setAnimeEpisodeFinishedDate: (
+    animeId: string,
+    season: number,
+    number: number,
+    dateYmd: string | undefined
+  ) => void;
+  setAnimeSeasonFinishedDate: (
+    animeId: string,
+    seasonNumber: number,
+    dateYmd: string | undefined
+  ) => void;
+  updateAnimeEpisodes: (
+    animeId: string,
+    seasons: Season[],
+    cast?: CastMember[],
+    runtimeAvg?: number
+  ) => void;
+  updateAnimeMetadata: (
+    animeId: string,
     patch: {
       title?: string;
       year?: number;
@@ -587,11 +665,12 @@ interface CueContextValue {
 
   // Live catalog additions
   addLiveShowToStore: (show: Show, andBookmark?: boolean) => void;
+  addLiveAnimeToStore: (anime: Anime, andBookmark?: boolean) => void;
   addLiveMovieToStore: (movie: Movie, status?: MovieWatchStatus, andBookmark?: boolean) => void;
   addLiveReadToStore: (item: ReadItem, status?: ReadWatchStatus, andBookmark?: boolean) => void;
   addLiveGameToStore: (game: GameItem, status?: GameWatchStatus, andBookmark?: boolean) => void;
   patchMediaMetadata: (
-    kind: 'show' | 'movie' | 'read' | 'game',
+    kind: 'show' | 'anime' | 'movie' | 'read' | 'game',
     id: string,
     patch: {
       posterUrl?: string;
@@ -616,7 +695,7 @@ interface CueContextValue {
   ) => void;
   toggleItemInList: (
     listId: string,
-    kind: 'show' | 'movie' | 'read' | 'game',
+    kind: 'show' | 'anime' | 'movie' | 'read' | 'game',
     id: string
   ) => void;
 
@@ -2278,6 +2357,659 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
       };
     });
   }, []);
+
+  // ===== ANIME ACTIONS (mirror show actions) =====
+
+  const watchNextEpisodeAnime = useCallback(
+    (animeId: string) => {
+      let toastMsg = '';
+      let toastSub: string | undefined;
+      let animePoster = '';
+      let toastAction: string | undefined = 'Log note';
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        animePoster = anime.posterUrl;
+        const prog = prev.animeProgress[animeId];
+        const stats = getShowStats(anime as any, prog);
+        const targetEp = stats.nextEpisode;
+        if (!targetEp) return prev;
+
+        const epKey = getEpisodeKey(targetEp.season, targetEp.number);
+        const watchedLabel = formatEpisodeCode(targetEp.season, targetEp.number);
+        const nowIso = new Date().toISOString();
+        const nextCounts = {
+          ...(prog?.episodeCounts || {}),
+          [epKey]: Math.max(1, (prog?.episodeCounts?.[epKey] || 0) + 1),
+        };
+        const nextEpFinishedAt = {
+          ...(prog?.episodeFinishedAt || {}),
+          [epKey]: prog?.episodeFinishedAt?.[epKey] || nowIso,
+        };
+        const updatedProg = recomputeShowStatus(anime as any, nextCounts, {
+          ...(prog || { status: 'not_started', episodeCounts: {}, bookmarked: true, notifications: true }),
+          episodeFinishedAt: nextEpFinishedAt,
+        });
+        const seasonNudge = buildShowSeasonToast(anime as any, targetEp.season, prog, updatedProg);
+        if (seasonNudge) {
+          toastMsg = seasonNudge.msg;
+          toastSub = undefined;
+          toastAction = seasonNudge.actionLabel || 'Log note';
+        } else {
+          const nextStats = getShowStats(anime as any, updatedProg);
+          toastMsg = anime.title;
+          toastSub = nextStats.nextEpisode
+            ? `Watched ${watchedLabel} · Next: ${formatEpisodeCode(
+                nextStats.nextEpisode.season,
+                nextStats.nextEpisode.number
+              )}`
+            : `Watched ${watchedLabel}`;
+          toastAction = 'Log note';
+        }
+        const historyEntry: HistoryEntry = {
+          id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          domain: 'watch',
+          mediaKind: 'anime',
+          mediaId: animeId,
+          title: anime.title,
+          posterUrl: anime.posterUrl,
+          codeLabel: watchedLabel,
+          subtitle: targetEp.title,
+          loggedAt: new Date().toISOString(),
+        };
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: updatedProg,
+          },
+          upcoming: prev.upcoming.filter(
+            (u) => !(u.kind === 'episode' && u.mediaId === animeId && u.daysUntil === 0)
+          ),
+          history: appendHistory(prev.history || [], historyEntry),
+        };
+      });
+
+      if (toastMsg) {
+        showToast(toastMsg, toastAction, () => pushRoute({ view: 'anime-detail', animeId }), {
+          domain: 'watch',
+          subtitle: toastSub,
+          posterUrl: animePoster,
+        });
+      }
+    },
+    [pushRoute, showToast]
+  );
+
+  const toggleEpisodeWatchedAnime = useCallback(
+    (animeId: string, season: number, number: number) => {
+      let toastMsg = '';
+      let toastSub: string | undefined;
+      let toastAction: string | undefined;
+      let animePoster = '';
+      let pendingPrompt: CatchUpPromptItem | null = null;
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        animePoster = anime.posterUrl;
+        const prog = prev.animeProgress[animeId];
+        const prevCounts = prog?.episodeCounts || {};
+        const epKey = getEpisodeKey(season, number);
+        const current = prevCounts[epKey] || 0;
+        const nowWatched = current === 0;
+        const orderedEps = [...anime.seasons]
+          .sort((a, b) => a.number - b.number)
+          .flatMap((s) => s.episodes);
+        const targetIdx = orderedEps.findIndex(
+          (e) => e.season === season && e.number === number
+        );
+        const targetEp = targetIdx >= 0 ? orderedEps[targetIdx] : undefined;
+
+        if (nowWatched && targetIdx > 0) {
+          const mediaKey = `anime:${animeId}`;
+          const skipped = prev.settings.skipCatchUpPromptIds?.includes(mediaKey);
+          if (!skipped) {
+            const priorEps = detectNonAdjacentPriorAtoms(
+              orderedEps,
+              targetIdx,
+              (e) => (prevCounts[getEpisodeKey(e.season, e.number)] || 0) > 0
+            );
+            if (priorEps.length > 0) {
+              pendingPrompt = {
+                id: `cup-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                mediaKey,
+                kind: 'anime',
+                mediaId: animeId,
+                title: anime.title,
+                count: priorEps.length,
+                unitSingular: 'episode',
+                unitPlural: 'episodes',
+                verbPast: 'watched',
+                mediaNoun: 'anime',
+                episodeTargets: priorEps.map((e) => ({ season: e.season, number: e.number })),
+              };
+            }
+          }
+        }
+
+        const nowIso = new Date().toISOString();
+        const nextCounts = {
+          ...prevCounts,
+          [epKey]: nowWatched ? 1 : 0,
+        };
+        const nextEpFinishedAt = { ...(prog?.episodeFinishedAt || {}) };
+        if (nowWatched) {
+          if (!nextEpFinishedAt[epKey]) nextEpFinishedAt[epKey] = nowIso;
+        } else {
+          delete nextEpFinishedAt[epKey];
+        }
+        const updatedProg = recomputeShowStatus(anime as any, nextCounts, {
+          ...(prog || { status: 'not_started', episodeCounts: {}, bookmarked: true, notifications: true }),
+          episodeFinishedAt: nextEpFinishedAt,
+        });
+        const codeLabel = formatEpisodeCode(season, number);
+        let nextHistory = prev.history || [];
+
+        if (nowWatched) {
+          const seasonToast = buildShowSeasonToast(anime as any, season, prog, updatedProg);
+          if (seasonToast) {
+            toastMsg = seasonToast.msg;
+            toastAction = seasonToast.actionLabel;
+          } else {
+            toastMsg = anime.title;
+            toastSub = targetEp?.title
+              ? `Watched ${codeLabel} · ${targetEp.title}`
+              : `Watched ${codeLabel}`;
+          }
+          nextHistory = appendHistory(nextHistory, {
+            id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            domain: 'watch',
+            mediaKind: 'anime',
+            mediaId: animeId,
+            title: anime.title,
+            posterUrl: anime.posterUrl,
+            codeLabel,
+            subtitle: targetEp?.title || codeLabel,
+            loggedAt: new Date().toISOString(),
+          });
+        }
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: updatedProg,
+          },
+          history: nextHistory,
+        };
+      });
+      if (toastMsg) {
+        showToast(toastMsg, toastAction, undefined, {
+          domain: 'watch',
+          subtitle: toastSub,
+          posterUrl: animePoster,
+        });
+      }
+      if (pendingPrompt) {
+        setCatchUpPrompt(pendingPrompt);
+      }
+    },
+    [showToast]
+  );
+
+  const incrementEpisodeRewatchAnime = useCallback(
+    (animeId: string, season: number, number: number, delta: number) => {
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        const prog = prev.animeProgress[animeId];
+        const epKey = getEpisodeKey(season, number);
+        const current = prog?.episodeCounts?.[epKey] || 0;
+        const nextCounts = {
+          ...(prog?.episodeCounts || {}),
+          [epKey]: Math.max(0, current + delta),
+        };
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: recomputeShowStatus(anime as any, nextCounts, prog),
+          },
+        };
+      });
+      if (delta > 0) showToast('Logged anime rewatch');
+    },
+    [showToast]
+  );
+
+  const toggleAnimeBookmark = useCallback(
+    (animeId: string) => {
+      let nextBookmarked = true;
+      commitState((prev) => {
+        const existing = prev.animeProgress[animeId];
+        nextBookmarked = !(existing?.bookmarked ?? false);
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: {
+              status: existing?.status || 'not_started',
+              episodeCounts: existing?.episodeCounts || {},
+              bookmarked: nextBookmarked,
+              notifications: existing?.notifications ?? true,
+              lastWatchedAt: existing?.lastWatchedAt,
+              rating: existing?.rating,
+              mood: existing?.mood,
+            },
+          },
+        };
+      });
+      showToast(nextBookmarked ? 'Added to Anime library' : 'Removed from Anime library');
+    },
+    [showToast]
+  );
+
+  const toggleAnimeNotifications = useCallback(
+    (animeId: string) => {
+      let nextVal = true;
+      commitState((prev) => {
+        const existing = prev.animeProgress[animeId];
+        nextVal = !(existing?.notifications ?? true);
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: {
+              status: existing?.status || 'not_started',
+              episodeCounts: existing?.episodeCounts || {},
+              bookmarked: existing?.bookmarked ?? true,
+              notifications: nextVal,
+              lastWatchedAt: existing?.lastWatchedAt,
+              rating: existing?.rating,
+              mood: existing?.mood,
+            },
+          },
+        };
+      });
+      showToast(nextVal ? 'Release alerts enabled' : 'Release alerts muted');
+    },
+    [showToast]
+  );
+
+  const markAnimeSeasonWatched = useCallback(
+    (animeId: string, seasonNumber: number, rewatchIfDone = false) => {
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        const season = anime.seasons.find((s) => s.number === seasonNumber);
+        if (!season) return prev;
+        const prog = prev.animeProgress[animeId];
+        const nextCounts = { ...(prog?.episodeCounts || {}) };
+        const allWatched = season.episodes.every(
+          (ep) => (nextCounts[getEpisodeKey(ep.season, ep.number)] || 0) > 0
+        );
+        for (const ep of season.episodes) {
+          const k = getEpisodeKey(ep.season, ep.number);
+          if (allWatched && rewatchIfDone) nextCounts[k] = (nextCounts[k] || 1) + 1;
+          else if (allWatched) nextCounts[k] = 0;
+          else nextCounts[k] = Math.max(1, nextCounts[k] || 0);
+        }
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: recomputeShowStatus(anime as any, nextCounts, prog),
+          },
+        };
+      });
+      showToast(`Updated Season ${seasonNumber}`);
+    },
+    [showToast]
+  );
+
+  const markAnimeAllWatched = useCallback(
+    (animeId: string) => {
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        const prog = prev.animeProgress[animeId];
+        const nextCounts = { ...(prog?.episodeCounts || {}) };
+        for (const ep of [...anime.seasons].sort((a, b) => a.number - b.number).flatMap((s) => s.episodes)) {
+          const k = getEpisodeKey(ep.season, ep.number);
+          nextCounts[k] = Math.max(1, nextCounts[k] || 0);
+        }
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: recomputeShowStatus(anime as any, nextCounts, prog),
+          },
+        };
+      });
+      showToast('Marked all episodes watched');
+    },
+    [showToast]
+  );
+
+  const startAnimeRewatch = useCallback(
+    (animeId: string) => {
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        const prog = prev.animeProgress[animeId];
+        const nextCounts = { ...(prog?.episodeCounts || {}) };
+        for (const ep of [...anime.seasons].sort((a, b) => a.number - b.number).flatMap((s) => s.episodes)) {
+          const k = getEpisodeKey(ep.season, ep.number);
+          nextCounts[k] = (nextCounts[k] || 0) + 1;
+        }
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: recomputeShowStatus(anime as any, nextCounts, prog),
+          },
+        };
+      });
+      showToast('Logged full series rewatch');
+    },
+    [showToast]
+  );
+
+  const resetAnimeProgress = useCallback(
+    (animeId: string) => {
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        if (!anime) return prev;
+        const prog = prev.animeProgress[animeId];
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: recomputeShowStatus(anime as any, {}, prog),
+          },
+        };
+      });
+      showToast('Reset anime progress');
+    },
+    [showToast]
+  );
+
+  const rateAnime = useCallback((animeId: string, rating: number | undefined, source?: RatingSource) => {
+    commitState((prev) => {
+      const existing = prev.animeProgress[animeId];
+      return recomputeAutoCollectionRatings({
+        ...prev,
+        animeProgress: {
+          ...prev.animeProgress,
+          [animeId]: {
+            status: existing?.status || 'watching',
+            episodeCounts: existing?.episodeCounts || {},
+            bookmarked: existing?.bookmarked ?? true,
+            notifications: existing?.notifications ?? true,
+            lastWatchedAt: existing?.lastWatchedAt,
+            rating,
+            ratingSource: source || 'manual',
+            mood: existing?.mood,
+          },
+        },
+      });
+    });
+  }, []);
+
+  const setAnimeMood = useCallback((animeId: string, mood: PersonalMood | undefined) => {
+    commitState((prev) => {
+      const existing = prev.animeProgress[animeId];
+      return {
+        ...prev,
+        animeProgress: {
+          ...prev.animeProgress,
+          [animeId]: {
+            status: existing?.status || 'watching',
+            episodeCounts: existing?.episodeCounts || {},
+            bookmarked: existing?.bookmarked ?? true,
+            notifications: existing?.notifications ?? true,
+            lastWatchedAt: existing?.lastWatchedAt,
+            rating: existing?.rating,
+            ratingSource: existing?.ratingSource,
+            mood,
+          },
+        },
+      };
+    });
+  }, []);
+
+  const rateAnimeEpisode = useCallback(
+    (animeId: string, season: number, number: number, rating: number | undefined) => {
+      const epKey = getEpisodeKey(season, number);
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        const existing = prev.animeProgress[animeId];
+        const nextEpRatings = { ...(existing?.episodeRatings || {}) };
+        if (typeof rating === 'number' && rating > 0) {
+          nextEpRatings[epKey] = rating;
+        } else {
+          delete nextEpRatings[epKey];
+        }
+        const nextSeasonRatings = { ...(existing?.seasonRatings || {}) };
+        const nextSeasonSources = { ...(existing?.seasonRatingSource || {}) };
+        let nextRating = existing?.rating;
+        let nextRatingSource = existing?.ratingSource;
+
+        const baseProg: AnimeProgress = {
+          ...(existing || {}),
+          status: existing?.status || 'watching',
+          episodeCounts: existing?.episodeCounts || {},
+          bookmarked: existing?.bookmarked ?? true,
+          notifications: existing?.notifications ?? true,
+          episodeRatings: nextEpRatings,
+          seasonRatings: nextSeasonRatings,
+          seasonRatingSource: nextSeasonSources,
+        };
+
+        if (anime) {
+          const seasonAvg = getSeasonEpisodeAverage(anime as any, season, baseProg);
+          const resolvedSeason = applyAutoRating(
+            nextSeasonRatings[season],
+            nextSeasonSources[season],
+            seasonAvg?.avg ?? null
+          );
+          if (resolvedSeason.rating !== undefined && resolvedSeason.source) {
+            nextSeasonRatings[season] = resolvedSeason.rating;
+            nextSeasonSources[season] = resolvedSeason.source;
+          } else {
+            delete nextSeasonRatings[season];
+            delete nextSeasonSources[season];
+          }
+          const showAvg = getShowCalculatedAverage(anime as any, {
+            ...baseProg,
+            seasonRatings: nextSeasonRatings,
+            seasonRatingSource: nextSeasonSources,
+          });
+          const resolvedShow = applyAutoRating(
+            existing?.rating,
+            existing?.ratingSource,
+            showAvg?.avg ?? null
+          );
+          nextRating = resolvedShow.rating;
+          nextRatingSource = resolvedShow.source;
+        }
+
+        return recomputeAutoCollectionRatings({
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: {
+              ...baseProg,
+              seasonRatings: nextSeasonRatings,
+              seasonRatingSource: nextSeasonSources,
+              rating: nextRating,
+              ratingSource: nextRatingSource,
+            },
+          },
+        });
+      });
+    },
+    []
+  );
+
+  const rateAnimeSeason = useCallback(
+    (
+      animeId: string,
+      seasonNumber: number,
+      rating: number | undefined,
+      source?: RatingSource
+    ) => {
+      commitState((prev) => {
+        const anime = prev.animes[animeId];
+        const existing = prev.animeProgress[animeId];
+        const nextSeasonRatings = { ...(existing?.seasonRatings || {}) };
+        const nextSeasonSources = { ...(existing?.seasonRatingSource || {}) };
+        let nextRating = existing?.rating;
+        let nextRatingSource = existing?.ratingSource;
+
+        if (typeof rating === 'number' && rating > 0) {
+          nextSeasonRatings[seasonNumber] = rating;
+          nextSeasonSources[seasonNumber] = source || 'manual';
+        } else {
+          delete nextSeasonRatings[seasonNumber];
+          delete nextSeasonSources[seasonNumber];
+        }
+
+        const baseProg: AnimeProgress = {
+          ...(existing || {}),
+          status: existing?.status || 'watching',
+          episodeCounts: existing?.episodeCounts || {},
+          bookmarked: existing?.bookmarked ?? true,
+          notifications: existing?.notifications ?? true,
+          seasonRatings: nextSeasonRatings,
+          seasonRatingSource: nextSeasonSources,
+        };
+
+        if (anime) {
+          const seasonAvg = getSeasonEpisodeAverage(anime as any, seasonNumber, baseProg);
+          const resolvedSeason = applyAutoRating(
+            nextSeasonRatings[seasonNumber],
+            nextSeasonSources[seasonNumber],
+            seasonAvg?.avg ?? null
+          );
+          if (resolvedSeason.rating !== undefined && resolvedSeason.source) {
+            nextSeasonRatings[seasonNumber] = resolvedSeason.rating;
+            nextSeasonSources[seasonNumber] = resolvedSeason.source;
+          } else {
+            delete nextSeasonRatings[seasonNumber];
+            delete nextSeasonSources[seasonNumber];
+          }
+          const showAvg = getShowCalculatedAverage(anime as any, {
+            ...baseProg,
+            seasonRatings: nextSeasonRatings,
+            seasonRatingSource: nextSeasonSources,
+          });
+          const resolvedShow = applyAutoRating(
+            existing?.rating,
+            existing?.ratingSource,
+            showAvg?.avg ?? null
+          );
+          nextRating = resolvedShow.rating;
+          nextRatingSource = resolvedShow.source;
+        }
+
+        return recomputeAutoCollectionRatings({
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: {
+              ...baseProg,
+              seasonRatings: nextSeasonRatings,
+              seasonRatingSource: nextSeasonSources,
+              rating: nextRating,
+              ratingSource: nextRatingSource,
+            },
+          },
+        });
+      });
+    },
+    []
+  );
+
+  const setAnimeEpisodeFinishedDate = useCallback(
+    (animeId: string, season: number, number: number, dateYmd: string | undefined) => {
+      const epKey = getEpisodeKey(season, number);
+      const finishedAt = toFinishedIso(dateYmd);
+      commitState((prev) => {
+        const existing = prev.animeProgress[animeId];
+        const nextEpFinished = { ...(existing?.episodeFinishedAt || {}) };
+        if (finishedAt) nextEpFinished[epKey] = finishedAt;
+        else delete nextEpFinished[epKey];
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: { ...(existing || {}), episodeFinishedAt: nextEpFinished },
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const setAnimeSeasonFinishedDate = useCallback(
+    (animeId: string, seasonNumber: number, dateYmd: string | undefined) => {
+      const finishedAt = toFinishedIso(dateYmd);
+      commitState((prev) => {
+        const existing = prev.animeProgress[animeId];
+        const nextSeasonFinished = { ...(existing?.seasonFinishedAt || {}) };
+        if (finishedAt) nextSeasonFinished[seasonNumber] = finishedAt;
+        else delete nextSeasonFinished[seasonNumber];
+        return {
+          ...prev,
+          animeProgress: {
+            ...prev.animeProgress,
+            [animeId]: { ...(existing || {}), seasonFinishedAt: nextSeasonFinished },
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const updateAnimeEpisodes = useCallback(
+    (animeId: string, seasons: Season[], cast?: CastMember[], runtimeAvg?: number) => {
+      commitState((prev) => {
+        const existing = prev.animes[animeId];
+        if (!existing) return prev;
+        return {
+          ...prev,
+          animes: {
+            ...prev.animes,
+            [animeId]: {
+              ...existing,
+              seasons,
+              totalEpisodes: seasons.reduce((sum, s) => sum + s.episodes.length, 0),
+              cast: cast ?? existing.cast,
+              runtimeAvg: runtimeAvg ?? existing.runtimeAvg,
+            },
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const updateAnimeMetadata = useCallback(
+    (animeId: string, patch: { title?: string; year?: number; posterUrl?: string; totalEpisodes?: number }) => {
+      commitState((prev) => {
+        const existing = prev.animes[animeId];
+        if (!existing) return prev;
+        return {
+          ...prev,
+          animes: {
+            ...prev.animes,
+            [animeId]: { ...existing, ...patch },
+          },
+        };
+      });
+    },
+    []
+  );
 
   const toggleMovieWatched = useCallback(
     (movieId: string) => {
@@ -5654,6 +6386,41 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
     [showToast]
   );
 
+  const addLiveAnimeToStore = useCallback(
+    (anime: Anime, andBookmark = true) => {
+      commitState((prev) => {
+        const exists = Boolean(prev.animes[anime.id]);
+        const existingProgress = prev.animeProgress[anime.id];
+        return {
+          ...prev,
+          animes: { ...prev.animes, [anime.id]: anime },
+          animeOrder: exists ? prev.animeOrder : [anime.id, ...prev.animeOrder],
+          animeProgress: andBookmark
+            ? {
+                ...prev.animeProgress,
+                [anime.id]: existingProgress
+                  ? { ...existingProgress, bookmarked: true }
+                  : {
+                      status: 'not_started',
+                      episodeCounts: {},
+                      bookmarked: true,
+                      notifications: true,
+                    },
+              }
+            : prev.animeProgress,
+        };
+      });
+      if (andBookmark) {
+        showToast(anime.title, undefined, undefined, {
+          domain: 'watch',
+          subtitle: 'Added to Anime',
+          posterUrl: anime.posterUrl,
+        });
+      }
+    },
+    [showToast]
+  );
+
   const addLiveMovieToStore = useCallback(
     (movie: Movie, status: MovieWatchStatus = 'watchlist', andBookmark = true) => {
       commitState((prev) => {
@@ -5771,7 +6538,7 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
 
   const patchMediaMetadata = useCallback(
     (
-      kind: 'show' | 'movie' | 'read' | 'game',
+      kind: 'show' | 'anime' | 'movie' | 'read' | 'game',
       id: string,
       patch: {
         posterUrl?: string;
@@ -5792,6 +6559,21 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
                 ...s,
                 posterUrl: patch.posterUrl ?? s.posterUrl,
                 backdropUrl: patch.backdropUrl ?? s.backdropUrl,
+              },
+            },
+          };
+        }
+        if (kind === 'anime') {
+          const a = prev.animes[id];
+          if (!a) return prev;
+          return {
+            ...prev,
+            animes: {
+              ...prev.animes,
+              [id]: {
+                ...a,
+                posterUrl: patch.posterUrl ?? a.posterUrl,
+                backdropUrl: patch.backdropUrl ?? a.backdropUrl,
               },
             },
           };
@@ -6692,7 +7474,7 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
   }, [flushPendingIsbnScans]);
 
   const toggleItemInList = useCallback(
-    (listId: string, kind: 'show' | 'movie' | 'read' | 'game', id: string) => {
+    (listId: string, kind: 'show' | 'anime' | 'movie' | 'read' | 'game', id: string) => {
       let added = false;
       commitState((prev) =>
         recomputeAutoCollectionRatings({
@@ -6837,6 +7619,7 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
         updatedCount: 0,
         skippedCount: 0,
         addedShowIds: [],
+        addedAnimeIds: [],
         addedMovieIds: [],
         addedReadIds: [],
         addedGameIds: [],
@@ -6874,15 +7657,18 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
       );
 
       const nextShows = { ...prev.shows };
+      const nextAnimes = { ...prev.animes };
       const nextMovies = { ...prev.movies };
       const nextReadItems = { ...prev.readItems };
       const nextGames = { ...prev.games };
       const nextShowProgress = { ...prev.showProgress };
+      const nextAnimeProgress = { ...prev.animeProgress };
       const nextMovieProgress = { ...prev.movieProgress };
       const nextReadProgress = { ...prev.readProgress };
       const nextGameProgress = { ...prev.gameProgress };
 
       const newShowIds: string[] = [];
+      const newAnimeIds: string[] = [];
       const newMovieIds: string[] = [];
       const newReadIds: string[] = [];
       const newGameIds: string[] = [];
@@ -6890,6 +7676,7 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
 
       const prevReadItemsBackup: Record<string, ReadItem> = {};
       const prevShowProgressBackup: Record<string, ShowProgress | null> = {};
+      const prevAnimeProgressBackup: Record<string, AnimeProgress | null> = {};
       const prevMovieProgressBackup: Record<string, MovieProgress | null> = {};
       const prevReadProgressBackup: Record<string, ReadProgress | null> = {};
       const prevGameProgressBackup: Record<string, GameProgress | null> = {};
@@ -7125,6 +7912,49 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
                 nextReadProgress[existingId] = patched;
               }
             }
+          } else if (c.kind === 'anime' && nextAnimes[existingId]) {
+            const ap = nextAnimeProgress[existingId];
+            if (ap) {
+              const patched = { ...ap };
+              if (!patched.rating && c.userRating) {
+                patched.rating = c.userRating;
+                changed = true;
+              }
+              if (c.completed && primaryIso) {
+                if (!patched.finishedAt) {
+                  patched.finishedAt = primaryIso;
+                  patched.lastWatchedAt = patched.lastWatchedAt || primaryIso;
+                  changed = true;
+                }
+                const { runs, addedCount } = mergeImportRuns(
+                  patched.completedRuns,
+                  c,
+                  primaryIso,
+                  existingId
+                );
+                if (addedCount > 0) {
+                  patched.completedRuns = runs;
+                  changed = true;
+                }
+              }
+              if (c.seasonDates) {
+                const nextSeasons = { ...(patched.seasonFinishedAt || {}) };
+                for (const [sNumStr, iso] of Object.entries(c.seasonDates)) {
+                  const sNum = Number(sNumStr);
+                  if (!nextSeasons[sNum] && iso) {
+                    nextSeasons[sNum] = iso;
+                    changed = true;
+                  }
+                }
+                if (changed) patched.seasonFinishedAt = nextSeasons;
+              }
+              if (changed) {
+                if (prevAnimeProgressBackup[existingId] === undefined) {
+                  prevAnimeProgressBackup[existingId] = ap;
+                }
+                nextAnimeProgress[existingId] = patched;
+              }
+            }
           } else if (c.kind === 'game' && nextGames[existingId]) {
             const gp = nextGameProgress[existingId];
             if (gp) {
@@ -7210,7 +8040,50 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
               title: storedShow.title,
               posterUrl: storedShow.posterUrl,
               codeLabel: 'Imported · Finished',
-              subtitle: storedShow.mediaType === 'anime' ? 'Anime' : 'Show',
+              subtitle: (storedShow as any).mediaType === 'anime' ? 'Anime' : 'Show',
+              loggedAt: primaryIso || nowIso,
+            });
+          }
+          added += 1;
+        } else if (c.kind === 'anime' && entry.anime) {
+          const anime = entry.anime;
+          const aid = nextAnimes[anime.id] ? `${anime.id}-${idx}` : anime.id;
+          const storedAnime = aid === anime.id ? anime : { ...anime, id: aid };
+          nextAnimes[aid] = storedAnime;
+          newAnimeIds.push(aid);
+          const epCounts: Record<string, number> = {};
+          if (c.completed) {
+            for (const ep of getAllEpisodes(storedAnime as any)) {
+              epCounts[getEpisodeKey(ep.season, ep.number)] = 1;
+            }
+          }
+          const { runs } = c.completed
+            ? mergeImportRuns(undefined, c, primaryIso, aid)
+            : { runs: [] as CompletionRun[] };
+          nextAnimeProgress[aid] = {
+            status: c.completed ? 'finished' : 'not_started',
+            episodeCounts: epCounts,
+            bookmarked: true,
+            notifications: true,
+            lastWatchedAt: c.completed ? primaryIso : undefined,
+            finishedAt: c.completed ? primaryIso : undefined,
+            completedRuns: runs.length > 0 ? runs : undefined,
+            seasonFinishedAt:
+              c.seasonDates && Object.keys(c.seasonDates).length > 0
+                ? { ...c.seasonDates }
+                : undefined,
+            rating: c.userRating,
+          };
+          if (c.completed) {
+            historyAdds.push({
+              id: `hist-imp-${aid}-${Date.now()}`,
+              domain: 'watch',
+              mediaKind: 'anime',
+              mediaId: aid,
+              title: storedAnime.title,
+              posterUrl: storedAnime.posterUrl,
+              codeLabel: 'Imported · Finished',
+              subtitle: 'Anime',
               loggedAt: primaryIso || nowIso,
             });
           }
@@ -7331,14 +8204,17 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
       let nextBatchState: CueStoreState = {
         ...prev,
         shows: nextShows,
+        animes: nextAnimes,
         movies: nextMovies,
         readItems: nextReadItems,
         games: nextGames,
         showOrder: [...newShowIds, ...prev.showOrder],
+        animeOrder: [...newAnimeIds, ...prev.animeOrder],
         movieOrder: [...newMovieIds, ...prev.movieOrder],
         readOrder: [...newReadIds, ...prev.readOrder],
         gameOrder: [...newGameIds, ...prev.gameOrder],
         showProgress: nextShowProgress,
+        animeProgress: nextAnimeProgress,
         movieProgress: nextMovieProgress,
         readProgress: nextReadProgress,
         gameProgress: nextGameProgress,
@@ -7380,6 +8256,7 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
           updatedCount: updated,
           skippedCount: skipped,
           addedShowIds: newShowIds,
+          addedAnimeIds: newAnimeIds,
           addedMovieIds: newMovieIds,
           addedReadIds: newReadIds,
           addedGameIds: newGameIds,
@@ -7389,6 +8266,9 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
             : {}),
           ...(Object.keys(prevShowProgressBackup).length > 0
             ? { prevShowProgress: prevShowProgressBackup }
+            : {}),
+          ...(Object.keys(prevAnimeProgressBackup).length > 0
+            ? { prevAnimeProgress: prevAnimeProgressBackup }
             : {}),
           ...(Object.keys(prevMovieProgressBackup).length > 0
             ? { prevMovieProgress: prevMovieProgressBackup }
@@ -7776,6 +8656,24 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
         setShowMood,
         updateShowEpisodes,
         updateShowMetadata,
+        // Anime actions
+        watchNextEpisodeAnime,
+        toggleEpisodeWatchedAnime,
+        incrementEpisodeRewatchAnime,
+        toggleAnimeBookmark,
+        toggleAnimeNotifications,
+        markAnimeSeasonWatched,
+        markAnimeAllWatched,
+        startAnimeRewatch,
+        resetAnimeProgress,
+        rateAnime,
+        setAnimeMood,
+        rateAnimeEpisode,
+        rateAnimeSeason,
+        setAnimeEpisodeFinishedDate,
+        setAnimeSeasonFinishedDate,
+        updateAnimeEpisodes,
+        updateAnimeMetadata,
         toggleMovieWatched,
         incrementMovieRewatch,
         toggleMovieWatchlist,
@@ -7847,6 +8745,7 @@ export function CueProvider({ children }: { children: React.ReactNode }) {
         removePendingIsbnScan,
         flushPendingIsbnScans,
         addLiveShowToStore,
+        addLiveAnimeToStore,
         addLiveMovieToStore,
         addLiveReadToStore,
         addLiveGameToStore,

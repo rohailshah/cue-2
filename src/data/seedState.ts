@@ -1,5 +1,7 @@
 import generated from './generatedMedia.json';
 import type {
+  Anime,
+  AnimeProgress,
   AppNotification,
   CueStoreState,
   CustomList,
@@ -17,7 +19,8 @@ import type {
 } from '../types';
 import { formatEpisodeCode, getAllEpisodes, getEpisodeKey } from '../utils/stats';
 
-const rawShows = generated.shows as Show[];
+const rawShows = (generated.shows as Show[]).filter((s) => s.mediaType === 'tv');
+const rawAnimes = (generated.shows as unknown as (Show | Anime)[]).filter((s) => s.mediaType === 'anime') as Anime[];
 const rawMovies = generated.movies as Movie[];
 const rawReadItems = (generated.readItems || []) as ReadItem[];
 const rawGames = (generated.games || []) as GameItem[];
@@ -48,6 +51,13 @@ export function createSeedState(): CueStoreState {
   for (const s of rawShows) {
     shows[s.id] = s;
     showOrder.push(s.id);
+  }
+
+  const animes: Record<string, Anime> = {};
+  const animeOrder: string[] = [];
+  for (const a of rawAnimes) {
+    animes[a.id] = a;
+    animeOrder.push(a.id);
   }
 
   const movies: Record<string, Movie> = {};
@@ -199,6 +209,24 @@ export function createSeedState(): CueStoreState {
       lastWatchedAt: hoursAgo(200),
       rating: 5,
       mood: 'emotional',
+    },
+  };
+
+  const animeProgress: Record<string, AnimeProgress> = {
+    'attack-on-titan': {
+      status: 'finished',
+      episodeCounts: markFirstEpisodes(animes['attack-on-titan'] as unknown as Show, 999, 1),
+      bookmarked: true,
+      notifications: false,
+      lastWatchedAt: hoursAgo(200),
+      rating: 5,
+      mood: 'emotional',
+    },
+    'solo-leveling': {
+      status: 'not_started',
+      episodeCounts: {},
+      bookmarked: true,
+      notifications: true,
     },
   };
 
@@ -801,14 +829,17 @@ export function createSeedState(): CueStoreState {
 
   return {
     shows,
+    animes,
     movies,
     readItems,
     games,
     showOrder,
+    animeOrder,
     movieOrder,
     readOrder,
     gameOrder,
     showProgress,
+    animeProgress,
     movieProgress,
     readProgress,
     gameProgress,
@@ -849,14 +880,17 @@ export function createSeedState(): CueStoreState {
 export function createEmptyState(): CueStoreState {
   return {
     shows: {},
+    animes: {},
     movies: {},
     readItems: {},
     games: {},
     showOrder: [],
+    animeOrder: [],
     movieOrder: [],
     readOrder: [],
     gameOrder: [],
     showProgress: {},
+    animeProgress: {},
     movieProgress: {},
     readProgress: {},
     gameProgress: {},

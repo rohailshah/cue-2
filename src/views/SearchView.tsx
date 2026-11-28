@@ -114,6 +114,7 @@ export function SearchView({
     goBack,
     pushRoute,
     addLiveShowToStore,
+    addLiveAnimeToStore,
     addLiveMovieToStore,
     addLiveReadToStore,
     updateReadEditionCovers,
@@ -544,9 +545,14 @@ export function SearchView({
 
     setHydratingId(item.id);
     try {
-      const show = await hydrateLiveShow(item, state.settings.tmdbApiKey);
-      addLiveShowToStore(show, andAdd);
-      if (!andAdd) pushRoute({ view: 'show-detail', showId: show.id });
+      const hydrated = await hydrateLiveShow(item, state.settings.tmdbApiKey);
+      if (hydrated.mediaType === 'anime') {
+        addLiveAnimeToStore(hydrated, andAdd);
+        if (!andAdd) pushRoute({ view: 'anime-detail', animeId: hydrated.id });
+      } else {
+        addLiveShowToStore(hydrated, andAdd);
+        if (!andAdd) pushRoute({ view: 'show-detail', showId: hydrated.id });
+      }
     } finally {
       setHydratingId(null);
     }

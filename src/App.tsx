@@ -17,6 +17,7 @@ import { ReadEditionsView } from './views/ReadEditionsView';
 import { ReadView } from './views/ReadView';
 import { SearchView } from './views/SearchView';
 import { ShowDetailView } from './views/ShowDetailView';
+import { AnimeDetailView } from './views/AnimeDetailView';
 import { WatchView } from './views/WatchView';
 
 function CueShell() {
@@ -53,6 +54,8 @@ function CueShell() {
         return <SearchView subView={route.subView} />;
       case 'show-detail':
         return <ShowDetailView showId={route.showId} />;
+      case 'anime-detail':
+        return <AnimeDetailView animeId={route.animeId} />;
       case 'movie-detail':
         return <MovieDetailView movieId={route.movieId} />;
       case 'read-detail':
